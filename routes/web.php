@@ -24,7 +24,7 @@ use App\Http\Controllers\backend\PinVerificationController;
 use App\Http\Controllers\backend\PoConfirmationController;
 use App\Http\Controllers\backend\PoexConfirmationController;
 use App\Http\Controllers\backend\ProdukController;
-use App\Http\Controllers\Backend\PurchaseOrderController;
+use App\Http\Controllers\backend\PurchaseOrderController;
 use App\Http\Controllers\backend\PurchaseOrderReportController;
 use App\Http\Controllers\backend\ReturController;
 use App\Http\Controllers\backend\ReturDocumentController;
