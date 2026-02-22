@@ -171,7 +171,7 @@
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         <li>
                                             <a class="dropdown-item" href="{{ route('training-programs.show', $program->id) }}">
-                                                <i class="ri-edit-line me-2"></i>Detail
+                                                <i class="ri-eye-line me-2"></i>Detail
                                             </a>
                                         </li>
                                         <li>
