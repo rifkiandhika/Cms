@@ -170,10 +170,8 @@
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         <li>
-                                            <a class="dropdown-item" href="#" 
-                                               data-bs-toggle="modal" 
-                                               data-bs-target="#viewProgramModal{{ $program->id }}">
-                                                <i class="ri-eye-line me-2"></i>Lihat Detail
+                                            <a class="dropdown-item" href="{{ route('training-programs.show', $program->id) }}">
+                                                <i class="ri-edit-line me-2"></i>Detail
                                             </a>
                                         </li>
                                         <li>
@@ -191,8 +189,7 @@
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
                                             <form action="{{ route('training-programs.destroy', $program->id) }}" 
-                                                  method="POST" 
-                                                  onsubmit="return confirm('Yakin ingin menghapus program ini?')">
+                                                  method="POST" class="delete-training">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" class="dropdown-item text-danger">
@@ -226,12 +223,12 @@ $(document).ready(function() {
     // Auto dismiss alerts
     setTimeout(() => $('.alert').fadeOut(), 5000);
 });
-$(document).on('submit', '.delete-gallery', function(e) {
+$(document).on('submit', '.delete-training', function(e) {
     e.preventDefault();
     var form = this;
     Swal.fire({
         title: 'Apakah Anda yakin?',
-        text: "Galeri akan dihapus permanen!",
+        text: "Program training akan dihapus permanen!",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
