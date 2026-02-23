@@ -58,9 +58,7 @@
                     <span class="menu-text">Manajemen Supplier</span>
                 </a>
                 <ul class="treeview-menu">
-                    <li class="{{ Request::is('suppliers') ? 'active' : '' }}">
-                        <a href="{{ route('suppliers.index') }}">Data Supplier</a>
-                    </li>
+                    
                     <li class="{{ Request::is('purchase-orders*') ? 'active' : '' }}">
                         <a href="{{ route('po.index') }}">Purchase Order</a>
                     </li>
@@ -109,6 +107,9 @@
                     </li>
                     <li class="{{ Request::is('produks') ? 'active' : '' }}">
                         <a href="{{ route('produks.index') }}">Data Produk</a>
+                    </li>
+                    <li class="{{ Request::is('suppliers') ? 'active' : '' }}">
+                        <a href="{{ route('suppliers.index') }}">Data Supplier</a>
                     </li>
                     <li class="{{ Request::is('customers') ? 'active' : '' }}">
                         <a href="{{ route('customers.index') }}">Data Customer</a>

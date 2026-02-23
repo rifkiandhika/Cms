@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('no_batch')->nullable();
             $table->string('judul', 200)->comment('Nama produk/katalog');
             $table->string('nama', 200)->comment('Nama barang detail');
-            $table->enum('jenis', ['obat', 'alkes', 'reagensia', 'Lainnya']);
+            $table->string('jenis');
             $table->string('merk', 100)->nullable();
             $table->string('satuan', 50);
             $table->date('exp_date')->nullable();

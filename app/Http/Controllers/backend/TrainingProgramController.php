@@ -22,6 +22,20 @@ class TrainingProgramController extends Controller
         return view('training_programs.create');
     }
 
+    public function show(TrainingProgram $trainingProgram)
+    {
+        $trainingProgram->load([
+            'mainCategories' => fn ($q) => $q->orderBy('order'),
+            'mainCategories.subCategories' => fn ($q) => $q->orderBy('order'),
+            'mainCategories.subCategories.trainingItems' => fn ($q) => $q->orderBy('order'),
+            'mainCategories.subCategories.trainingItems.details' => fn ($q) => $q->orderBy('order'),
+            'mainCategories.subCategories.trainingItems.images',
+            'mainCategories.subCategories.trainingItems.metadata',
+        ]);
+
+        return view('training_programs.show', compact('trainingProgram'));
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([

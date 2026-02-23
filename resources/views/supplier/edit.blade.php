@@ -34,7 +34,7 @@
                     @method('PUT')
                     @include('supplier.form')
 
-                    <div class="text-end">
+                    <div class="text-end mt-2">
                         <button type="submit" class="btn btn-primary">Submit</button>
                     </div>
                 </form>

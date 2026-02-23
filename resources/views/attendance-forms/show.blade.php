@@ -55,7 +55,7 @@
 
                 {{-- Tabel Peserta --}}
                 <div class="table-responsive mb-4 print-section">
-                    <table class="table table-bordered align-middle" style="font-size:0.85rem;">
+                    <table class="table table-striped align-middle" style="font-size:0.85rem;">
                         <thead class="table-light text-center">
                             <tr>
                                 <th style="width:5%">No</th>

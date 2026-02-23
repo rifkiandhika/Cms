@@ -69,6 +69,11 @@ class Customer extends Model
         return 'CUST' . $newNumber;
     }
 
+    public function detailCustomers()
+    {
+        return $this->hasMany(DetailCustomer::class, 'customer_id');
+    }
+
     // Relasi ke Purchase Orders (Penjualan)
     public function purchaseOrders()
     {

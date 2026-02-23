@@ -46,9 +46,9 @@
                                 <th>Nama Produk</th>
                                 <th>Merk</th>
                                 <th>Jenis</th>
-                                <th>Satuan</th>
-                                <th>Harga Beli</th>
-                                <th>Harga Jual</th>
+                                {{-- <th>Satuan</th> --}}
+                                {{-- <th>Harga Beli</th>
+                                <th>Harga Jual</th> --}}
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
@@ -62,9 +62,9 @@
                                     <td>{{ $data->nama_produk }}</td>
                                     <td>{{ $data->merk ?? '-' }}</td>
                                     <td>{{ $data->jenis }}</td>
-                                    <td>{{ $data->satuan }}</td>
-                                    <td>Rp {{ number_format($data->harga_beli, 0, ',', '.') }}</td>
-                                    <td>Rp {{ number_format($data->harga_jual, 0, ',', '.') }}</td>
+                                    {{-- <td>{{ $data->satuan }}</td> --}}
+                                    {{-- <td>Rp {{ number_format($data->produkSatuans->harga_beli, 0, ',', '.') }}</td>
+                                    <td>Rp {{ number_format($data->produkSatuans->harga_jual, 0, ',', '.') }}</td> --}}
                                     <td>
                                         @if($data->status == 'aktif')
                                             <span class="badge bg-success">Aktif</span>

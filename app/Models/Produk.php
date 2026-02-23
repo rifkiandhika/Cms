@@ -70,6 +70,21 @@ class Produk extends Model
         return $this->belongsTo(Jenis::class, 'jenis', 'nama_jenis');
     }
 
+    public function satuanDasar()
+    {
+        return $this->belongsTo(Satuan::class, 'satuan_dasar_id');
+    }
+
+    public function produkSatuans()
+    {
+        return $this->hasMany(ProdukSatuan::class);
+    }
+
+    public function satuanDefault()
+    {
+        return $this->hasOne(ProdukSatuan::class)->where('is_default', true);
+    }
+
     /**
      * Scope untuk filter status aktif
      */
@@ -85,4 +100,6 @@ class Produk extends Model
     {
         return $query->where('status', 'nonaktif');
     }
+
+    
 }

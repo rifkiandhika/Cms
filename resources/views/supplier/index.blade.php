@@ -69,18 +69,19 @@
                                                             </li>
                                                         @endif
 
-                                                        <li class="text-center">
+                                                        <li>
                                                             <a class="dropdown-item editBtn" 
                                                             href="{{ route('suppliers.edit', $data->id) }}">
                                                                 <i class="ri-pencil-fill"></i> Edit
                                                             </a>
                                                         </li>
+                                                        <hr>
                                                         <li>
                                                             <form action="{{ route('suppliers.destroy', $data->id) }}" method="POST" class="d-inline delete-confirm">
                                                                 @csrf
                                                                 @method('DELETE')
-                                                                <button type="submit" class="btn w-100 btn-outline-secondary">
-                                                                    <i class="ri-delete-bin-6-line"></i> Hapus
+                                                                <button type="submit" class="btn w-100 dropdown-item">
+                                                                    <i class="ri-delete-bin-6-line text-danger"></i> Hapus
                                                                 </button>
                                                             </form>
                                                         </li>

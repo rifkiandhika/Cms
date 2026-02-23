@@ -115,7 +115,7 @@
                                         <div class="d-flex align-items-center">
                                             <div class="avatar-xs me-2">
                                                 <span class="avatar-title rounded-circle bg-soft-primary text-primary">
-                                                    {{ substr($data->nama_satuan, 0, 1) }}
+                                                    {{ substr($data->nama_satuan, 0, 1)  }}
                                                 </span>
                                             </div>
                                         </div>

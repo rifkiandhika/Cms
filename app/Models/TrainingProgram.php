@@ -36,4 +36,5 @@ class TrainingProgram extends Model
             'archived' => '<span class="badge bg-secondary">Arsip</span>',
         ][$this->status] ?? '';
     }
+    
 }
