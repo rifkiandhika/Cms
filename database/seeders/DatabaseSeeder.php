@@ -18,7 +18,8 @@ class DatabaseSeeder extends Seeder
             DefaultUserSeeder::class,
             EvaluationSeeder::class,
             QualityManagementSeeder::class,
-            TrainingProgramSeeder::class
+            TrainingProgramSeeder::class,
+            SatuanSeeder::class
         ]);
     }
 }
