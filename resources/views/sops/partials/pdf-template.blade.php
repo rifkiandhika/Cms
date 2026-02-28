@@ -94,7 +94,9 @@
                         </td>
                         <td style="border: 1px solid #000; padding: 10px;">
                             {{-- @if($approval->tanda_tangan) --}}
-                                <span class="text-center" style="font-size: 9pt;">{{ $approval->tanda_tangan->format('d/m/Y') }}</span>
+                                <span class="text-center" style="font-size: 9pt;">
+                                    {{ $approval->tanda_tangan ? $approval->tanda_tangan->format('d/m/Y') : '-' }}
+                                </span>
                             {{-- @else
                                 <span style="color: #999;">-</span>
                             @endif --}}
