@@ -14,6 +14,10 @@
     cursor: default;
     pointer-events: none;
 }
+.treeview-menu li > a {
+    padding-left: 2.5rem;
+    display: block;
+}
 </style>
 
 <nav id="sidebar" class="sidebar-wrapper">
@@ -58,7 +62,9 @@
                     <span class="menu-text">Manajemen Supplier</span>
                 </a>
                 <ul class="treeview-menu">
-                    
+                    <li class="{{ Request::is('suppliers') ? 'active' : '' }}">
+                        <a href="{{ route('suppliers.index') }}">Supplier</a>
+                    </li>
                     <li class="{{ Request::is('purchase-orders*') ? 'active' : '' }}">
                         <a href="{{ route('po.index') }}">Purchase Order</a>
                     </li>
@@ -66,23 +72,33 @@
             </li>
 
             {{-- Manajemen Gudang --}}
-            <li class="treeview {{ Request::is('gudangs*') || Request::is('tagihan*') ? 'active' : '' }}">
+            <li class="treeview {{ Request::is('gudangs*') || Request::is('returs*') || Request::is('tagihan*') ? 'active' : '' }}">
                 <a href="#!">
                     <i class="ri-store-2-line"></i>
                     <span class="menu-text">Manajemen Gudang</span>
                 </a>
                 <ul class="treeview-menu">
                     <li class="{{ Request::is('gudangs') ? 'active' : '' }}">
-                        <a href="{{ route('gudangs.index') }}">Data Gudang</a>
+                        <a href="{{ route('gudangs.index') }}">Gudang</a>
                     </li>
-                    <li class="{{ Request::is('returs') && !Request::has('status') ? 'active' : '' }}">
-                        <a href="{{ route('returs.index') }}">
-                            {{-- <i class="ri-list-check"></i> --}}
-                            Retur
-                        </a>
+                    <li class="{{ Request::is('returs*') ? 'active' : '' }}">
+                        <a href="{{ route('returs.index') }}">Retur</a>
                     </li>
                     <li class="{{ Request::is('tagihan') ? 'active' : '' }}">
                         <a href="{{ route('tagihan.index') }}">Tagihan PO</a>
+                    </li>
+                </ul>
+            </li>
+
+            {{-- Manajemen Supplier --}}
+            <li class="treeview {{ Request::is('customers*')  ? 'active' : '' }}">
+                <a href="#!">
+                    <i class="ri-folder-user-line"></i>
+                    <span class="menu-text">Manajemen Customer</span>
+                </a>
+                <ul class="treeview-menu">
+                    <li class="{{ Request::is('customers') ? 'active' : '' }}">
+                        <a href="{{ route('customers.index') }}">Customer</a>
                     </li>
                 </ul>
             </li>
@@ -96,23 +112,17 @@
             <li class="treeview {{ Request::is('satuans*') || Request::is('jenis*') || Request::is('produks*') || Request::is('customers*') || Request::is('categories*') ? 'active' : '' }}">
                 <a href="#!">
                     <i class="ri-database-line"></i>
-                    <span class="menu-text">Data Master</span>
+                    <span class="menu-text">Master Data</span>
                 </a>
                 <ul class="treeview-menu">
                     <li class="{{ Request::is('satuans') ? 'active' : '' }}">
-                        <a href="{{ route('satuans.index') }}">Data Satuan</a>
+                        <a href="{{ route('satuans.index') }}">Satuan</a>
                     </li>
                     <li class="{{ Request::is('jenis') ? 'active' : '' }}">
-                        <a href="{{ route('jenis.index') }}">Data Jenis</a>
+                        <a href="{{ route('jenis.index') }}">Jenis</a>
                     </li>
                     <li class="{{ Request::is('produks') ? 'active' : '' }}">
-                        <a href="{{ route('produks.index') }}">Data Produk</a>
-                    </li>
-                    <li class="{{ Request::is('suppliers') ? 'active' : '' }}">
-                        <a href="{{ route('suppliers.index') }}">Data Supplier</a>
-                    </li>
-                    <li class="{{ Request::is('customers') ? 'active' : '' }}">
-                        <a href="{{ route('customers.index') }}">Data Customer</a>
+                        <a href="{{ route('produks.index') }}">Produk</a>
                     </li>
                     <li class="{{ Request::is('categories') ? 'active' : '' }}">
                         <a href="{{ route('categories.index') }}">Kategori</a>
@@ -120,7 +130,7 @@
                 </ul>
             </li>
 
-            {{-- SOP Perusahaan (standalone, tanpa submenu) --}}
+            {{-- SOP Perusahaan --}}
             <li class="{{ Request::is('sops*') ? 'active current-page' : '' }}">
                 <a href="{{ route('sops.index') }}">
                     <i class="ri-book-open-line"></i>
@@ -147,7 +157,7 @@
                         <a href="{{ route('reports.gudangs.index') }}">Report Gudang</a>
                     </li>
                     <li class="{{ Request::is('audits') ? 'active' : '' }}">
-                        <a href="{{ route('audits.index') }}">Data Audit</a>
+                        <a href="{{ route('audits.index') }}">Audit</a>
                     </li>
                 </ul>
             </li>
