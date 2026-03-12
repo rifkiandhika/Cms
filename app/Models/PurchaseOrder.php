@@ -223,19 +223,22 @@ class PurchaseOrder extends Model
     // Method untuk generate nomor GR
     public static function generateNoGR()
     {
-        $prefix = 'PO-GR-';
-        $lastGR = self::where('no_gr', 'like', $prefix . '%')
+        $prefix = 'GR-';
+        $date = now()->format('Ymd'); // format: 20260228
+        $fullPrefix = $prefix . $date . '-';
+
+        $lastGR = self::where('no_gr', 'like', $fullPrefix . '%')
             ->orderBy('no_gr', 'desc')
             ->first();
 
         if ($lastGR) {
-            $lastNumber = (int) substr($lastGR->no_gr, strlen($prefix));
+            $lastNumber = (int) substr($lastGR->no_gr, -3);
             $newNumber = $lastNumber + 1;
         } else {
             $newNumber = 1;
         }
 
-        return $prefix . str_pad($newNumber, 6, '0', STR_PAD_LEFT);
+        return $fullPrefix . str_pad($newNumber, 3, '0', STR_PAD_LEFT);
     }
 
     // Method untuk cek apakah sudah input invoice

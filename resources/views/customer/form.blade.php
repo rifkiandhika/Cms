@@ -36,7 +36,6 @@
         @enderror
     </div>
 
-    
     <div class="col-md-4">
         <label class="form-label">NPWP</label>
         <input type="text" name="npwp"
@@ -94,10 +93,10 @@
                 'laboratorium' => 'Laboratorium',
                 'apotek'       => 'Apotek',
                 'lainnya'      => 'Lainnya',
-            ] as $val => $label)
+            ] as $val => $lbl)
                 <option value="{{ $val }}"
                     {{ old('tipe_customer', $customer->tipe_customer ?? '') == $val ? 'selected' : '' }}>
-                    {{ $label }}
+                    {{ $lbl }}
                 </option>
             @endforeach
         </select>
@@ -120,7 +119,7 @@
     </div>
 </div>
 
-<div class="row mb-3">
+<div class="row mb-4">
     <div class="col-md-4">
         <label class="form-label">Kota</label>
         <input type="text" name="kota"
@@ -170,38 +169,29 @@
 </div>
 
 {{-- ============================== DETAIL PRODUK ============================== --}}
-<h5 class="mb-3">Detail Produk</h5>
+<h5 class="mb-1">Detail Produk</h5>
+<p class="text-muted small mb-3">
+    <i class="ri-information-line"></i>
+    Pilih <strong>Jenis</strong> terlebih dahulu, kemudian pilih <strong>Produk</strong>,
+    lalu pilih <strong>Satuan Produk</strong>. Field <strong>Isi</strong> akan terisi otomatis.
+    Lengkapi <strong>Harga Jual</strong> per satuan tersebut.
+</p>
 
 <div class="table-responsive">
-    <table class="table table-bordered table-striped align-middle" id="detail-table" style="min-width: 1400px;">
+    <table class="table table-bordered table-striped align-middle" id="detail-table" style="min-width: 900px;">
         <thead class="table-light">
             <tr>
-                <th style="min-width:120px;">No Batch</th>
-                <th style="min-width:160px;">Judul</th>
                 <th style="min-width:160px;">Jenis <span class="text-danger">*</span></th>
                 <th style="min-width:220px;">Nama Produk <span class="text-danger">*</span></th>
-                <th style="min-width:130px;">Merk</th>
-                <th style="min-width:130px;">Satuan <span class="text-danger">*</span></th>
-                <th style="min-width:140px;">Exp Date</th>
-                <th style="min-width:110px;">Stock Live</th>
-                <th style="min-width:110px;">Stock PO</th>
-                <th style="min-width:130px;">Min. Persediaan</th>
-                <th style="min-width:140px;">Harga Jual</th>
-                <th style="min-width:110px;">Kode Rak</th>
+                <th style="min-width:180px;">Satuan Produk <span class="text-danger">*</span></th>
+                <th style="min-width:90px;">Isi<br><small class="fw-normal text-muted">qty satuan dasar</small></th>
+                <th style="min-width:160px;">Harga Jual <span class="text-danger">*</span></th>
+                <th style="min-width:200px;">Catatan</th>
+                <th style="min-width:90px;">Status</th>
                 <th style="min-width:90px;">Aksi</th>
             </tr>
         </thead>
         <tbody>
-            {{--
-                ROOT CAUSE FIX:
-                - Saat CREATE: $customer = new Customer() → $customer->exists = false
-                  → detailCustomers() mengembalikan empty Collection (bukan null)
-                  → ?? [null] tidak terpicu → tbody kosong, tidak ada baris
-                - Saat EDIT: $customer->exists = true dan detailCustomers berisi data
-
-                Solusi: cek $customer->exists secara eksplisit.
-                Jika false (create mode) atau collection kosong → tampilkan 1 baris kosong [null].
-            --}}
             @php
                 $details = ($customer->exists && $customer->detailCustomers->isNotEmpty())
                     ? $customer->detailCustomers
@@ -209,42 +199,32 @@
             @endphp
 
             @foreach($details as $detail)
-            <tr class="customer-detail-item" data-detail-id="{{ $detail->id ?? '' }}">
+            <tr class="customer-detail-item">
 
-                <input type="hidden" name="detail_id[]" value="{{ $detail->id ?? '' }}">
-                <input type="hidden" name="product_id[]" class="product-id-input" value="{{ $detail->product_id ?? '' }}">
+                {{-- Hidden inputs: ID relasi --}}
+                <input type="hidden" name="detail_id[]"         value="{{ $detail->id ?? '' }}">
+                <input type="hidden" name="produk_id[]"         class="produk-id-input"         value="{{ $detail->produk_id ?? '' }}">
+                <input type="hidden" name="produk_satuan_id[]"  class="produk-satuan-id-input"  value="{{ $detail->produk_satuan_id ?? '' }}">
 
+                {{-- JENIS --}}
                 <td>
-                    <textarea name="no_batch[]"
-                              class="form-control auto-expand no-batch-input"
-                              rows="1"
-                              placeholder="e.g. BTC-36523">{{ $detail->no_batch ?? '' }}</textarea>
-                </td>
-
-                <td>
-                    <textarea name="judul[]"
-                              class="form-control auto-expand"
-                              rows="1"
-                              placeholder="e.g. Obat Sakit Kepala">{{ $detail->judul ?? '' }}</textarea>
-                </td>
-
-                <td>
-                    <select name="jenis[]" class="form-select jenis-select" required>
+                    <select name="jenis[]" class="form-select jenis-select">
                         <option value="" hidden>-- Pilih Jenis --</option>
                         @foreach($jenis as $j)
                             <option value="{{ $j->nama_jenis }}"
-                                {{ ($detail->jenis ?? '') === $j->nama_jenis ? 'selected' : '' }}>
+                                {{ ($detail->produk->jenis ?? '') === $j->nama_jenis ? 'selected' : '' }}>
                                 {{ $j->nama_jenis }}
                             </option>
                         @endforeach
                     </select>
                 </td>
 
+                {{-- NAMA PRODUK --}}
                 <td>
                     <select class="form-select produk-select w-100"
-                            style="{{ ($detail && $detail->product_id) ? '' : 'display: none;' }}"
-                            {{ ($detail && $detail->product_id) ? '' : 'disabled' }}>
-                        @if($detail && $detail->product_id && $detail->produk)
+                            style="{{ ($detail && $detail->produk_id) ? '' : 'display: none;' }}"
+                            {{ ($detail && $detail->produk_id) ? '' : 'disabled' }}>
+                        @if($detail && $detail->produk_id && $detail->produk)
                             <option value="{{ $detail->produk->id }}" selected>
                                 {{ $detail->produk->nama_produk }} ({{ $detail->produk->kode_produk }})
                             </option>
@@ -252,75 +232,67 @@
                             <option value="">-- Pilih atau ketik untuk mencari --</option>
                         @endif
                     </select>
-
-                    <input type="text"
-                           name="nama_manual[]"
-                           class="form-control nama-manual"
-                           value="{{ ($detail && !$detail->product_id) ? ($detail->nama ?? '') : '' }}"
-                           style="{{ ($detail && !$detail->product_id && ($detail->nama ?? '')) ? '' : 'display: none;' }}"
-                           placeholder="Masukkan nama barang"
-                           {{ ($detail && !$detail->product_id && ($detail->nama ?? '')) ? '' : 'disabled' }}>
-
-                    {{-- Teks hint saat jenis belum dipilih --}}
                     <span class="nama-placeholder text-muted small"
-                          style="{{ ($detail && ($detail->product_id || ($detail->nama ?? ''))) ? 'display:none;' : '' }}">
+                          style="{{ ($detail && $detail->produk_id) ? 'display:none;' : '' }}">
                         — Pilih jenis terlebih dahulu —
                     </span>
                 </td>
 
+                {{-- SATUAN PRODUK --}}
                 <td>
-                    <textarea name="merk[]"
-                              class="form-control auto-expand merk-input"
-                              rows="1"
-                              placeholder="e.g. Kimia Farma">{{ $detail->merk ?? '' }}</textarea>
-                </td>
-
-                <td>
-                    <select name="satuan[]" class="form-select" required>
+                    <select class="form-select satuan-produk-select"
+                            {{ ($detail && $detail->produk_id) ? '' : 'disabled' }}>
                         <option value="" hidden>-- Pilih Satuan --</option>
-                        @foreach($satuans as $data)
-                            <option value="{{ $data->nama_satuan }}"
-                                {{ ($detail->satuan ?? '') == $data->nama_satuan ? 'selected' : '' }}>
-                                {{ $data->nama_satuan }}
-                            </option>
-                        @endforeach
+                        @if($detail && $detail->produk && $detail->produk->produkSatuans)
+                            @foreach($detail->produk->produkSatuans as $ps)
+                                <option value="{{ $ps->id }}" data-isi="{{ $ps->konversi }}"
+                                    {{ ($detail->produk_satuan_id ?? '') == $ps->id ? 'selected' : '' }}>
+                                    {{ $ps->label }}
+                                </option>
+                            @endforeach
+                        @endif
                     </select>
+                    <small class="satuan-hint text-muted">
+                        @if($detail && $detail->produkSatuan)
+                            1 {{ $detail->produkSatuan->label }} = {{ $detail->produkSatuan->konversi }} satuan dasar
+                        @endif
+                    </small>
                 </td>
 
+                {{-- ISI (readonly, diisi otomatis dari data-isi satuan) --}}
                 <td>
-                    <input type="date" name="exp_date[]" class="form-control"
-                           value="{{ $detail->exp_date ?? '' }}">
+                    <input type="number" name="isi[]" class="form-control isi-input"
+                           value="{{ $detail->produkSatuan->konversi ?? 1 }}"
+                           min="1" step="1" placeholder="1" readonly>
+                    <small class="text-muted">satuan dasar</small>
                 </td>
 
+                {{-- HARGA JUAL --}}
                 <td>
-                    <input type="number" name="stock_live[]" class="form-control"
-                           value="{{ $detail->stock_live ?? '' }}" placeholder="e.g. 50" min="0">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Rp</span>
+                        <input type="text" name="harga_jual[]" class="form-control format-rupiah"
+                               value="{{ $detail ? number_format($detail->harga_jual ?? 0, 0, ',', '.') : '' }}"
+                               placeholder="0">
+                    </div>
                 </td>
 
+                {{-- CATATAN --}}
                 <td>
-                    <input type="number" name="stock_po[]" class="form-control"
-                           value="{{ $detail->stock_po ?? '' }}" placeholder="e.g. 20" min="0">
+                    <textarea name="catatan[]" class="form-control auto-expand"
+                              rows="1" placeholder="e.g. Harga berlaku s/d Des 2025">{{ $detail->catatan ?? '' }}</textarea>
                 </td>
 
-                <td>
-                    <input type="number" name="min_persediaan[]" class="form-control"
-                           value="{{ $detail->min_persediaan ?? '' }}" placeholder="e.g. 10" min="0">
+                {{-- IS_AKTIF --}}
+                <td class="text-center">
+                    <div class="form-check form-switch d-flex justify-content-center">
+                        <input class="form-check-input" type="checkbox" name="is_aktif[]"
+                               value="1" {{ ($detail->is_aktif ?? true) ? 'checked' : '' }}>
+                    </div>
+                    <small class="text-muted d-block">Aktif</small>
                 </td>
 
-                {{-- Harga Jual (bukan harga beli) --}}
-                <td>
-                    <input type="text"
-                           name="harga_jual[]"
-                           class="form-control format-rupiah"
-                           value="{{ $detail ? number_format($detail->harga_jual ?? 0, 0, ',', '.') : '' }}"
-                           placeholder="e.g. 500.000">
-                </td>
-
-                <td>
-                    <input type="text" name="kode_rak[]" class="form-control"
-                           value="{{ $detail->kode_rak ?? '' }}" placeholder="e.g. A12">
-                </td>
-
+                {{-- AKSI --}}
                 <td class="text-center">
                     <div class="d-flex flex-column justify-content-center align-items-center gap-2">
                         <button type="button" class="btn btn-sm btn-outline-success btn-add" title="Tambah Baris">
@@ -340,58 +312,35 @@
 @push('styles')
 <style>
     .select2-container .select2-selection--single {
-        height: 37px !important;
-        padding-top: 3px;
-        border: 1px solid #ced4da;
-        border-radius: 6px;
+        height: 37px !important; padding-top: 3px;
+        border: 1px solid #ced4da; border-radius: 6px;
     }
-    .select2-selection__rendered {
-        line-height: 26px !important;
-    }
-    .table {
-        border: 1px solid #ced4da !important;
-    }
+    .select2-selection__rendered { line-height: 26px !important; }
+    .table { border: 1px solid #ced4da !important; }
     textarea.auto-expand {
-        resize: none;
-        overflow: hidden;
-        min-height: 37px;
-        line-height: 1.5;
-        box-sizing: border-box;
-        width: 100%;
+        resize: none; overflow: hidden;
+        min-height: 37px; line-height: 1.5; box-sizing: border-box; width: 100%;
     }
-    #detail-table td {
-        padding: 6px 8px;
-        vertical-align: middle;
-    }
-    #detail-table th {
-        white-space: nowrap;
-        font-size: 0.85rem;
-    }
+    #detail-table td { padding: 6px 8px; vertical-align: middle; }
+    #detail-table th { white-space: nowrap; font-size: 0.85rem; }
     .nama-placeholder {
-        display: block;
-        padding: 4px 2px;
-        font-size: 0.82rem;
-        color: #adb5bd;
-        font-style: italic;
+        display: block; padding: 4px 2px;
+        font-size: 0.82rem; color: #adb5bd; font-style: italic;
     }
+    .satuan-hint { display: block; font-size: 0.78rem; color: #6c757d; margin-top: 2px; }
+    .isi-input[readonly] { background-color: #f8f9fa; }
 </style>
 @endpush
 
 @push('scripts')
 <script>
-    window.produkApiUrl = "{{ route('api.produk.search') }}";
+    window.produkApiUrl    = "{{ route('api.produk.search') }}";
+    window.produkSatuanUrl = "{{ route('api.produk.satuans') }}";
 
     window.jenisOptions = `
         <option value="" hidden>-- Pilih Jenis --</option>
         @foreach($jenis as $j)
             <option value="{{ $j->nama_jenis }}">{{ $j->nama_jenis }}</option>
-        @endforeach
-    `;
-
-    window.satuanOptions = `
-        <option value="" hidden>-- Pilih Satuan --</option>
-        @foreach($satuans as $s)
-            <option value="{{ $s->nama_satuan }}">{{ $s->nama_satuan }}</option>
         @endforeach
     `;
 </script>
@@ -401,38 +350,28 @@
         el.style.height = 'auto';
         el.style.height = el.scrollHeight + 'px';
     }
-
     function initAutoExpand(scope) {
-        const textareas = (scope || document).querySelectorAll('textarea.auto-expand');
-        textareas.forEach(function(ta) {
+        (scope || document).querySelectorAll('textarea.auto-expand').forEach(function(ta) {
             autoExpandTextarea(ta);
             if (!ta.dataset.autoExpandInit) {
                 ta.dataset.autoExpandInit = '1';
-                ta.addEventListener('input', function() {
-                    autoExpandTextarea(this);
-                });
+                ta.addEventListener('input', function() { autoExpandTextarea(this); });
             }
         });
     }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        initAutoExpand();
-    });
+    document.addEventListener('DOMContentLoaded', function() { initAutoExpand(); });
 </script>
 
 <script>
     function initFormatRupiah(scope) {
-        const inputs = (scope || document).querySelectorAll('.format-rupiah');
-        inputs.forEach(function(input) {
+        (scope || document).querySelectorAll('.format-rupiah').forEach(function(input) {
             if (input.dataset.rupiahInit) return;
             input.dataset.rupiahInit = '1';
             input.addEventListener('input', function() {
-                let value = this.value.replace(/\D/g, '');
-                this.value = new Intl.NumberFormat('id-ID').format(value);
+                this.value = new Intl.NumberFormat('id-ID').format(this.value.replace(/\D/g, ''));
             });
         });
     }
-
     document.addEventListener('DOMContentLoaded', function() {
         initFormatRupiah();
         document.querySelectorAll('form').forEach(function(form) {
@@ -448,22 +387,61 @@
 <script>
 $(document).ready(function() {
 
-    function initProdukSelect2(el) {
-        const $row  = el.closest('.customer-detail-item');
+    // =========================================================
+    // HELPER: isi dropdown satuan dari array produk_satuans
+    // =========================================================
+    function populateSatuanProduk($row, satuans, selectedId) {
+        const $sel  = $row.find('.satuan-produk-select');
+        const $isi  = $row.find('.isi-input');
+        const $hint = $row.find('.satuan-hint');
+        const $psId = $row.find('.produk-satuan-id-input');
+
+        $sel.html('<option value="" hidden>-- Pilih Satuan --</option>');
+
+        if (!satuans || satuans.length === 0) {
+            $sel.prop('disabled', true);
+            $hint.text('Produk ini belum memiliki satuan');
+            return;
+        }
+
+        satuans.forEach(function(ps) {
+            const selected = (selectedId && ps.id == selectedId) ? 'selected' : '';
+            $sel.append(`<option value="${ps.id}" data-isi="${ps.isi}" ${selected}>${ps.label}</option>`);
+        });
+        $sel.prop('disabled', false);
+
+        // Auto-pilih default jika belum ada selectedId
+        if (!selectedId) {
+            const def = satuans.find(ps => ps.is_default);
+            if (def) $sel.val(def.id);
+        }
+
+        // Bind change — update isi & hidden produk_satuan_id
+        $sel.off('change.satuan').on('change.satuan', function() {
+            const $opt = $(this).find('option:selected');
+            const isi  = parseInt($opt.data('isi')) || 1;
+            $isi.val(isi);
+            $psId.val($(this).val());
+            $hint.text($(this).val() ? `1 ${$opt.text().trim()} = ${isi} satuan dasar` : '');
+        });
+
+        $sel.trigger('change.satuan');
+    }
+
+    // =========================================================
+    // INISIALISASI Select2 pada produk-select
+    // =========================================================
+    function initProdukSelect2($el) {
+        const $row  = $el.closest('.customer-detail-item');
         const jenis = $row.find('.jenis-select').val();
+        if (!jenis) return;
+        if ($el.hasClass('select2-hidden-accessible')) return;
 
-        if (!jenis || jenis === 'Lainnya') return;
-        if (el.hasClass('select2-hidden-accessible')) return;
-
-        el.select2({
+        $el.select2({
             placeholder: '-- Pilih atau ketik untuk mencari --',
-            allowClear: true,
-            width: '100%',
-            dropdownAutoWidth: true,
+            allowClear: true, width: '100%', dropdownAutoWidth: true,
             ajax: {
-                url: window.produkApiUrl,
-                dataType: 'json',
-                delay: 250,
+                url: window.produkApiUrl, dataType: 'json', delay: 250,
                 data: function(params) {
                     return { q: params.term, jenis: jenis, page: params.page || 1 };
                 },
@@ -471,13 +449,10 @@ $(document).ready(function() {
                     return {
                         results: (data.items || []).map(function(item) {
                             return {
-                                id: item.id,
-                                text: item.text,
-                                kode_produk: item.kode_produk,
-                                nama_produk: item.nama_produk,
-                                merk: item.merk || '',
-                                satuan: item.satuan || '',
-                                harga_jual: item.harga_jual || 0
+                                id:             item.id,
+                                text:           item.text,
+                                kode_produk:    item.kode_produk,
+                                produk_satuans: item.produk_satuans || []
                             };
                         }),
                         pagination: { more: data.pagination ? data.pagination.more : false }
@@ -489,15 +464,19 @@ $(document).ready(function() {
         });
     }
 
-    // Init Select2 untuk baris yang sudah ada saat page load (mode EDIT)
-    $('.produk-select').each(function() {
-        const $select = $(this);
-        const $row    = $select.closest('.customer-detail-item');
-        const jenis   = $row.find('.jenis-select').val();
+    // Init Select2 untuk baris edit yang sudah punya produk_id
+    $('.customer-detail-item').each(function() {
+        const $row     = $(this);
+        const $sel     = $row.find('.produk-select');
+        const produkId = $row.find('.produk-id-input').val();
+        const psId     = $row.find('.produk-satuan-id-input').val();
 
-        if (jenis && jenis !== 'Lainnya') {
-            $select.show().prop('disabled', false);
-            initProdukSelect2($select);
+        if (produkId) {
+            $sel.show().prop('disabled', false);
+            initProdukSelect2($sel);
+            $.get(window.produkSatuanUrl, { produk_id: produkId }, function(data) {
+                populateSatuanProduk($row, data.satuans || [], psId);
+            });
         }
     });
 
@@ -505,100 +484,71 @@ $(document).ready(function() {
     // Handle perubahan Jenis
     // =========================================================
     $('#detail-table').on('change', '.jenis-select', function() {
-        const $row          = $(this).closest('.customer-detail-item');
-        const jenis         = $(this).val();
-        const $produkSelect = $row.find('.produk-select');
-        const $namaManual   = $row.find('.nama-manual');
-        const $placeholder  = $row.find('.nama-placeholder');
+        const $row    = $(this).closest('.customer-detail-item');
+        const jenis   = $(this).val();
+        const $ps     = $row.find('.produk-select');
+        const $ph     = $row.find('.nama-placeholder');
+        const $satuan = $row.find('.satuan-produk-select');
 
-        $row.find('.product-id-input').val('');
-
-        if ($produkSelect.hasClass('select2-hidden-accessible')) {
-            $produkSelect.val(null).trigger('change').select2('destroy');
-        }
-        $produkSelect.val('');
-        $namaManual.val('');
+        // Reset
+        $row.find('.produk-id-input').val('');
+        $row.find('.produk-satuan-id-input').val('');
+        if ($ps.hasClass('select2-hidden-accessible')) { $ps.val(null).trigger('change').select2('destroy'); }
+        $ps.val('');
+        $satuan.html('<option value="" hidden>-- Pilih Satuan --</option>').prop('disabled', true);
+        $row.find('.satuan-hint').text('');
+        $row.find('.isi-input').val(1);
 
         if (!jenis) {
-            $produkSelect.hide().prop('disabled', true).prop('required', false)
-                .html('<option value="">-- Pilih Jenis Terlebih Dahulu --</option>');
-            $namaManual.hide().prop('disabled', true).prop('required', false);
-            $placeholder.show();
-        } else if (jenis === 'Lainnya') {
-            $produkSelect.hide().prop('disabled', true).prop('required', false);
-            $namaManual.show().prop('disabled', false).prop('required', true).focus();
-            $placeholder.hide();
+            $ps.hide().prop('disabled', true)
+               .html('<option value="">-- Pilih Jenis Terlebih Dahulu --</option>');
+            $ph.show();
         } else {
-            $produkSelect.show().prop('disabled', false).prop('required', true)
-                .html('<option value="">-- Pilih atau ketik untuk mencari --</option>');
-            $namaManual.hide().prop('disabled', true).prop('required', false);
-            $placeholder.hide();
-            initProdukSelect2($produkSelect);
+            $ps.show().prop('disabled', false)
+               .html('<option value="">-- Pilih atau ketik untuk mencari --</option>');
+            $ph.hide();
+            initProdukSelect2($ps);
         }
     });
 
     // =========================================================
-    // Saat produk dipilih — auto-fill field terkait
+    // Saat produk dipilih → populate satuan
     // =========================================================
     $('#detail-table').on('select2:select', '.produk-select', function(e) {
         const data = e.params.data;
         const $row = $(this).closest('.customer-detail-item');
 
-        $row.find('.product-id-input').val(data.id);
+        $row.find('.produk-id-input').val(data.id);
+        $row.find('.produk-satuan-id-input').val('');
 
-        if (data.kode_produk) {
-            const $noBatch = $row.find('.no-batch-input');
-            $noBatch.val(data.kode_produk);
-            autoExpandTextarea($noBatch[0]);
-        }
-
-        if (data.merk) {
-            const $merk = $row.find('.merk-input');
-            $merk.val(data.merk);
-            autoExpandTextarea($merk[0]);
-        }
-
-        if (data.satuan) {
-            $row.find('select[name="satuan[]"]').val(data.satuan);
-        }
-
-        if (data.harga_jual) {
-            $row.find('input[name="harga_jual[]"]').val(
-                new Intl.NumberFormat('id-ID').format(data.harga_jual)
-            );
-        }
+        populateSatuanProduk($row, data.produk_satuans || [], null);
     });
 
-    // Clear saat Select2 di-clear
+    // Saat produk di-clear
     $('#detail-table').on('select2:clear', '.produk-select', function() {
         const $row = $(this).closest('.customer-detail-item');
-        $row.find('.product-id-input').val('');
-        const $noBatch = $row.find('.no-batch-input');
-        $noBatch.val('');
-        autoExpandTextarea($noBatch[0]);
-    });
-
-    $('#detail-table').on('input', '.nama-manual', function() {
-        $(this).closest('.customer-detail-item').find('.product-id-input').val('');
+        $row.find('.produk-id-input').val('');
+        $row.find('.produk-satuan-id-input').val('');
+        $row.find('.satuan-produk-select')
+            .html('<option value="" hidden>-- Pilih Satuan --</option>').prop('disabled', true);
+        $row.find('.satuan-hint').text('');
+        $row.find('.isi-input').val(1);
     });
 
     // =========================================================
     // Tambah Baris Baru
     // =========================================================
     $('#detail-table').on('click', '.btn-add', function() {
-        const $tbody        = $('#detail-table tbody');
-        const jenisOptions  = window.jenisOptions  || '<option value="">-- Pilih Jenis --</option>';
-        const satuanOptions = window.satuanOptions || '<option value="">-- Pilih Satuan --</option>';
+        const jenisOptions = window.jenisOptions || '<option value="">-- Pilih Jenis --</option>';
 
         const $newRow = $(`
-            <tr class="customer-detail-item" data-detail-id="">
+            <tr class="customer-detail-item">
                 <input type="hidden" name="detail_id[]" value="">
-                <input type="hidden" name="product_id[]" class="product-id-input" value="">
+                <input type="hidden" name="produk_id[]" class="produk-id-input" value="">
+                <input type="hidden" name="produk_satuan_id[]" class="produk-satuan-id-input" value="">
 
-                <td><textarea name="no_batch[]" class="form-control auto-expand no-batch-input" rows="1" placeholder="e.g. BTC-36523"></textarea></td>
-                <td><textarea name="judul[]" class="form-control auto-expand" rows="1" placeholder="e.g. Obat Sakit Kepala"></textarea></td>
                 <td>
-                    <select name="jenis[]" class="form-select jenis-select" required>
+                    <select name="jenis[]" class="form-select jenis-select">
                         ${jenisOptions}
                     </select>
                 </td>
@@ -606,21 +556,37 @@ $(document).ready(function() {
                     <select class="form-select produk-select w-100" style="display:none;" disabled>
                         <option value="">-- Pilih Jenis Terlebih Dahulu --</option>
                     </select>
-                    <input type="text" name="nama_manual[]" class="form-control nama-manual" style="display:none;" placeholder="Masukkan nama barang" disabled>
-                    <span class="nama-placeholder text-muted small" style="font-style:italic;">— Pilih jenis terlebih dahulu —</span>
+                    <span class="nama-placeholder text-muted small" style="font-style:italic;">
+                        — Pilih jenis terlebih dahulu —
+                    </span>
                 </td>
-                <td><textarea name="merk[]" class="form-control auto-expand merk-input" rows="1" placeholder="e.g. Kimia Farma"></textarea></td>
                 <td>
-                    <select name="satuan[]" class="form-select" required>
-                        ${satuanOptions}
+                    <select class="form-select satuan-produk-select" disabled>
+                        <option value="" hidden>-- Pilih Satuan --</option>
                     </select>
+                    <small class="satuan-hint text-muted"></small>
                 </td>
-                <td><input type="date" name="exp_date[]" class="form-control"></td>
-                <td><input type="number" name="stock_live[]" class="form-control" placeholder="e.g. 50" min="0"></td>
-                <td><input type="number" name="stock_po[]" class="form-control" placeholder="e.g. 20" min="0"></td>
-                <td><input type="number" name="min_persediaan[]" class="form-control" placeholder="e.g. 10" min="0"></td>
-                <td><input type="text" name="harga_jual[]" class="form-control format-rupiah" placeholder="e.g. 5.000"></td>
-                <td><input type="text" name="kode_rak[]" class="form-control" placeholder="e.g. A12"></td>
+                <td>
+                    <input type="number" name="isi[]" class="form-control isi-input"
+                           value="1" min="1" step="1" placeholder="1" readonly>
+                    <small class="text-muted">satuan dasar</small>
+                </td>
+                <td>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Rp</span>
+                        <input type="text" name="harga_jual[]" class="form-control format-rupiah" placeholder="0">
+                    </div>
+                </td>
+                <td>
+                    <textarea name="catatan[]" class="form-control auto-expand" rows="1"
+                              placeholder="e.g. Harga berlaku s/d Des 2025"></textarea>
+                </td>
+                <td class="text-center">
+                    <div class="form-check form-switch d-flex justify-content-center">
+                        <input class="form-check-input" type="checkbox" name="is_aktif[]" value="1" checked>
+                    </div>
+                    <small class="text-muted d-block">Aktif</small>
+                </td>
                 <td class="text-center">
                     <div class="d-flex flex-column justify-content-center align-items-center gap-2">
                         <button type="button" class="btn btn-sm btn-outline-success btn-add" title="Tambah Baris">
@@ -634,7 +600,7 @@ $(document).ready(function() {
             </tr>
         `);
 
-        $tbody.append($newRow);
+        $('#detail-table tbody').append($newRow);
         initAutoExpand($newRow[0]);
         initFormatRupiah($newRow[0]);
     });
@@ -644,11 +610,9 @@ $(document).ready(function() {
     // =========================================================
     $('#detail-table').on('click', '.btn-remove', function() {
         if ($('#detail-table tbody tr').length > 1) {
-            const $row    = $(this).closest('tr');
-            const $select = $row.find('.produk-select');
-            if ($select.hasClass('select2-hidden-accessible')) {
-                $select.select2('destroy');
-            }
+            const $row = $(this).closest('tr');
+            const $sel = $row.find('.produk-select');
+            if ($sel.hasClass('select2-hidden-accessible')) $sel.select2('destroy');
             $row.remove();
         } else {
             alert('Minimal satu baris detail harus ada.');

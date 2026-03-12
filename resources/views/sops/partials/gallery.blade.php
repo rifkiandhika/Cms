@@ -4,7 +4,7 @@
         <h4 class="mb-1"><i class="ri-image-line me-2 text-primary"></i>Gallery</h4>
         <p class="text-muted mb-0">Kelola galeri dokumentasi pelatihan</p>
     </div>
-    <a href="{{ route('gallery.create') }}" class="btn btn-primary">
+    <a href="{{ route('gallery.create', ['sop_id' => $sop->id]) }}" class="btn btn-primary">
         <i class="ri-add-circle-line me-1"></i>Tambah Galeri
     </a>
 </div>
@@ -95,7 +95,7 @@
                         </td>
                         <td class="text-center">
                             <div class="btn-group">
-                                <a href="{{ route('gallery.edit', $item->id) }}"
+                                <a href="{{ route('gallery.edit', [$item->id, 'sop_id' => $item->sop_id]) }}"
                                    class="btn btn-sm btn-light" title="Edit">
                                     <i class="ri-edit-line"></i>
                                 </a>

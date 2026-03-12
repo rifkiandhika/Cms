@@ -11,15 +11,13 @@ class DetailCustomer extends Model
     use HasUuids;
 
     protected $table = 'detail_customers';
-
     protected $guarded = [];
 
     protected $casts = [
-        'exp_date'    => 'date',
-        'harga_jual'  => 'decimal:2',
-        'stock_live'  => 'integer',
-        'stock_po'    => 'integer',
-        'min_persediaan' => 'integer',
+        'harga_jual' => 'decimal:2',
+        'is_aktif'   => 'boolean',
+        // ← HAPUS: exp_date, stock_live, stock_po, min_persediaan
+        // Kolom-kolom ini sudah dihapus dari schema detail_customers
     ];
 
     public function customer(): BelongsTo
@@ -27,8 +25,14 @@ class DetailCustomer extends Model
         return $this->belongsTo(Customer::class, 'customer_id');
     }
 
+    // ← PERBAIKAN: FK lama 'product_id' → sekarang 'produk_id'
     public function produk(): BelongsTo
     {
-        return $this->belongsTo(Produk::class, 'product_id');
+        return $this->belongsTo(Produk::class, 'produk_id');
+    }
+
+    public function produkSatuan(): BelongsTo
+    {
+        return $this->belongsTo(ProdukSatuan::class, 'produk_satuan_id');
     }
 }

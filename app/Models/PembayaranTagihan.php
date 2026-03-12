@@ -4,19 +4,23 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class PembayaranTagihan extends Model
 {
-    use HasUuids;
+    use HasUuids, SoftDeletes;
+
     protected $table = 'pembayaran_tagihan';
     protected $primaryKey = 'id_pembayaran';
+    public $incrementing = false;
+    protected $keyType = 'string';
     protected $guarded = [];
 
     protected $casts = [
-        'tanggal_bayar' => 'date',
+        'tanggal_bayar'   => 'date',
         'tanggal_approve' => 'datetime',
-        'jumlah_bayar' => 'decimal:2',
+        'jumlah_bayar'    => 'decimal:2',
     ];
 
     protected static function boot()
@@ -31,31 +35,22 @@ class PembayaranTagihan extends Model
                 $model->no_pembayaran = self::generateNoPembayaran();
             }
         });
+
+        // Update tagihan hanya setelah pembayaran diverifikasi,
+        // bukan langsung saat created. Panggil $tagihan->updatePembayaran()
+        // di Service/Controller setelah status berubah menjadi 'diverifikasi'.
     }
 
-    /**
-     * Generate nomor pembayaran: PAY-YYYYMMDD-XXX
-     */
-    public static function generateNoPembayaran()
+    public static function generateNoPembayaran(): string
     {
         $prefix = 'PAY-' . date('Ymd') . '-';
-        $lastPayment = self::where('no_pembayaran', 'like', $prefix . '%')
-            ->orderBy('no_pembayaran', 'desc')
-            ->first();
-
-        if ($lastPayment) {
-            $lastNumber = (int) substr($lastPayment->no_pembayaran, -3);
-            $newNumber = str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
-        } else {
-            $newNumber = '001';
-        }
-
-        return $prefix . $newNumber;
+        $last   = self::where('no_pembayaran', 'like', $prefix . '%')->orderBy('no_pembayaran', 'desc')->first();
+        $newNumber = $last ? (int) substr($last->no_pembayaran, -3) + 1 : 1;
+        return $prefix . str_pad($newNumber, 3, '0', STR_PAD_LEFT);
     }
 
-    /**
-     * Relationships
-     */
+    // ── Relasi ──────────────────────────────────────────
+
     public function tagihan()
     {
         return $this->belongsTo(TagihanPo::class, 'id_tagihan', 'id_tagihan');
@@ -71,16 +66,27 @@ class PembayaranTagihan extends Model
         return $this->belongsTo(Karyawan::class, 'id_karyawan_approve', 'id_karyawan');
     }
 
-    /**
-     * Helpers
-     */
-    public function isVerified()
+    // ── Accessors ─────────────────────────────────────────
+
+    public function getFormattedJumlahBayarAttribute(): string
     {
-        return $this->status_pembayaran === 'diverifikasi';
+        return 'Rp ' . number_format($this->jumlah_bayar, 0, ',', '.');
     }
 
-    public function isPending()
+    // ── Helpers ───────────────────────────────────────────
+
+    public function isPending(): bool { return $this->status_pembayaran === 'pending'; }
+    public function isVerified(): bool { return $this->status_pembayaran === 'diverifikasi'; }
+
+    // ── Scopes ──────────────────────────────────────────
+
+    public function scopePending($query) { return $query->where('status_pembayaran', 'pending'); }
+    public function scopeVerified($query) { return $query->where('status_pembayaran', 'diverifikasi'); }
+    public function scopeToday($query) { return $query->whereDate('tanggal_bayar', today()); }
+
+    public function scopeThisMonth($query)
     {
-        return $this->status_pembayaran === 'pending';
+        return $query->whereYear('tanggal_bayar', now()->year)
+            ->whereMonth('tanggal_bayar', now()->month);
     }
 }

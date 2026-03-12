@@ -30,6 +30,7 @@ class AttendanceFormController extends Controller
     public function store(Request $request)
     {
         $request->validate([
+            'sop_id' => 'nullable|exists:sops,id',
             'topik_pelatihan'    => 'required|string|max:255',
             'tanggal'            => 'nullable|date',
             'tempat'             => 'nullable|string|max:255',
@@ -49,6 +50,7 @@ class AttendanceFormController extends Controller
 
         // Simpan header form
         $form = AttendanceForm::create([
+            'sop_id'          => $request->sop_id ?? null,
             'topik_pelatihan' => $request->topik_pelatihan,
             'tanggal'         => $request->tanggal,
             'tempat'          => $request->tempat,
@@ -79,6 +81,11 @@ class AttendanceFormController extends Controller
             ]);
         }
 
+        if ($request->sop_id) {
+            return redirect()->route('sops.show', $request->sop_id)
+                ->with('success', 'Daftar hadir berhasil disimpan.');
+        }
+
         return redirect()->route('attendance-forms.show', $form->id)
             ->with('success', 'Daftar hadir berhasil disimpan.');
     }
@@ -98,6 +105,7 @@ class AttendanceFormController extends Controller
     public function update(Request $request, AttendanceForm $attendanceForm)
     {
         $request->validate([
+            'sop_id' => 'nullable|exists:sops,id',
             'topik_pelatihan'    => 'required|string|max:255',
             'tanggal'            => 'nullable|date',
             'tempat'             => 'nullable|string|max:255',
@@ -114,6 +122,7 @@ class AttendanceFormController extends Controller
             ->toArray();
 
         $attendanceForm->update([
+            'sop_id'          => $request->sop_id ?? null,
             'topik_pelatihan' => $request->topik_pelatihan,
             'tanggal'         => $request->tanggal,
             'tempat'          => $request->tempat,
@@ -142,6 +151,11 @@ class AttendanceFormController extends Controller
                 'urutan'             => $urutan++,
                 'custom_values'      => count($customValues) > 0 ? $customValues : null,
             ]);
+        }
+
+        if ($attendanceForm->sop_id) {
+            return redirect()->route('sops.show', $attendanceForm->sop_id)
+                ->with('success', 'Daftar hadir berhasil diperbarui.');
         }
 
         return redirect()->route('attendance-forms.show', $attendanceForm->id)

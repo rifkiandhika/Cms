@@ -18,6 +18,7 @@
     <div class="card-body">
         <div class="row mb-3">
             <div class="col-md-6">
+                <input type="hidden" name="sop_id" value="{{ old('sop_id', request('sop_id') ?? $trainingProgram->sop_id ?? '') }}">
                 <label class="form-label">Judul Program <span class="text-danger">*</span></label>
                 <input type="text" name="title" class="form-control" 
                        value="{{ old('title', $trainingProgram->title ?? '') }}"

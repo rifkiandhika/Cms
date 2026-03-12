@@ -30,7 +30,9 @@ class EvaluationProgramController extends Controller
 
     public function store(Request $request)
     {
+        // dd($request->all());
         $validated = $request->validate([
+            'sop_id' => 'nullable|exists:sops,id',
             'title'                              => 'required|string|max:255',
             'materi_pelatihan'                   => 'required|string|max:255',
             'hari_tanggal'                       => 'nullable|date',
@@ -56,6 +58,7 @@ class EvaluationProgramController extends Controller
         DB::beginTransaction();
         try {
             $program = EvaluationProgram::create([
+                'sop_id'            => $validated['sop_id'] ?? null,
                 'title'            => $validated['title'],
                 'materi_pelatihan' => $validated['materi_pelatihan'],
                 'hari_tanggal'     => $validated['hari_tanggal'] ?? null,
@@ -126,6 +129,7 @@ class EvaluationProgramController extends Controller
     public function update(Request $request, EvaluationProgram $evaluationProgram)
     {
         $validated = $request->validate([
+            'sop_id' => 'nullable|exists:sops,id',
             'title'                              => 'required|string|max:255',
             'materi_pelatihan'                   => 'required|string|max:255',
             'hari_tanggal'                       => 'nullable|date',
@@ -152,6 +156,7 @@ class EvaluationProgramController extends Controller
         DB::beginTransaction();
         try {
             $evaluationProgram->update([
+                'sop_id'            => $validated['sop_id'] ?? null,
                 'title'            => $validated['title'],
                 'materi_pelatihan' => $validated['materi_pelatihan'],
                 'hari_tanggal'     => $validated['hari_tanggal'] ?? null,

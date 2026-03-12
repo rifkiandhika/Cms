@@ -58,7 +58,7 @@
 <div class="card border-0 shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
         <h5 class="mb-0"><i class="ri-database-2-line me-2"></i>Daftar Pengendalian Hama</h5>
-        <a href="{{ route('pengendalian-hama.create') }}" class="btn btn-primary btn-sm">
+        <a href="{{ route('pengendalian-hama.create', ['sop_id' => $sop->id]) }}" class="btn btn-primary btn-sm">
             <i class="ri-add-circle-line me-1"></i>Tambah Laporan
         </a>
     </div>

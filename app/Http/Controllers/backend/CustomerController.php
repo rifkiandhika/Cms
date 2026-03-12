@@ -20,8 +20,8 @@ class CustomerController extends Controller
 
     public function create()
     {
-        $jenis   = Jenis::where('status', 'Aktif')->orderBy('nama_jenis')->get();
-        $satuans = Satuan::where('status', 'Aktif')->orderBy('nama_satuan')->get();
+        $jenis    = Jenis::where('status', 'Aktif')->orderBy('nama_jenis')->get();
+        $satuans  = Satuan::where('status', 'Aktif')->orderBy('nama_satuan')->get();
         $customer = new Customer();
 
         return view('customer.create', compact('jenis', 'satuans', 'customer'));
@@ -30,6 +30,7 @@ class CustomerController extends Controller
     public function store(Request $request)
     {
         $request->validate([
+            // Data utama customer
             'kode_customer'    => 'required|string|max:50|unique:customers,kode_customer',
             'nama_customer'    => 'required|string|max:100',
             'tipe_customer'    => 'required|string',
@@ -43,33 +44,16 @@ class CustomerController extends Controller
             'npwp'             => 'nullable|string|max:30',
             'izin_operasional' => 'nullable|string|max:100',
 
-            // Detail produk
-            'jenis'            => 'nullable|array',
-            'jenis.*'          => 'required|string',
-            'product_id'       => 'nullable|array',
-            'product_id.*'     => 'nullable|uuid',
-            'nama_manual'      => 'nullable|array',
-            'nama_manual.*'    => 'nullable|string|max:200',
-            'no_batch'         => 'nullable|array',
-            'no_batch.*'       => 'nullable|string',
-            'judul'            => 'nullable|array',
-            'judul.*'          => 'nullable|string',
-            'merk'             => 'nullable|array',
-            'merk.*'           => 'nullable|string',
-            'satuan'           => 'nullable|array',
-            'satuan.*'         => 'nullable|string',
-            'harga_jual'       => 'nullable|array',
-            'harga_jual.*'     => 'nullable|numeric|min:0',
-            'stock_live'       => 'nullable|array',
-            'stock_live.*'     => 'nullable|integer|min:0',
-            'stock_po'         => 'nullable|array',
-            'stock_po.*'       => 'nullable|integer|min:0',
-            'min_persediaan'   => 'nullable|array',
-            'min_persediaan.*' => 'nullable|integer|min:0',
-            'exp_date'         => 'nullable|array',
-            'exp_date.*'       => 'nullable|date',
-            'kode_rak'         => 'nullable|array',
-            'kode_rak.*'       => 'nullable|string',
+            // Detail produk — sesuai kolom schema detail_customers
+            'produk_id'            => 'nullable|array',
+            'produk_id.*'          => 'nullable|uuid',
+            'produk_satuan_id'     => 'nullable|array',
+            'produk_satuan_id.*'   => 'nullable|uuid',
+            'harga_jual'           => 'nullable|array',
+            'harga_jual.*'         => 'nullable|numeric|min:0',
+            'catatan'              => 'nullable|array',
+            'catatan.*'            => 'nullable|string',
+            'is_aktif'             => 'nullable|array',
         ]);
 
         $customer = Customer::create([
@@ -95,7 +79,11 @@ class CustomerController extends Controller
 
     public function edit(Customer $customer)
     {
-        $customer->load(['detailCustomers.produk']);
+        // Load relasi produk dan produkSatuan untuk ditampilkan di blade
+        $customer->load([
+            'detailCustomers.produk.produkSatuans',
+            'detailCustomers.produkSatuan',
+        ]);
 
         $jenis   = Jenis::where('status', 'Aktif')->orderBy('nama_jenis')->get();
         $satuans = Satuan::where('status', 'Aktif')->orderBy('nama_satuan')->get();
@@ -119,14 +107,15 @@ class CustomerController extends Controller
             'npwp'             => 'nullable|string|max:30',
             'izin_operasional' => 'nullable|string|max:100',
 
-            'jenis'            => 'nullable|array',
-            'jenis.*'          => 'required|string',
-            'product_id'       => 'nullable|array',
-            'product_id.*'     => 'nullable|uuid',
-            'nama_manual'      => 'nullable|array',
-            'nama_manual.*'    => 'nullable|string|max:200',
-            'satuan'           => 'nullable|array',
-            'satuan.*'         => 'nullable|string',
+            'produk_id'            => 'nullable|array',
+            'produk_id.*'          => 'nullable|uuid',
+            'produk_satuan_id'     => 'nullable|array',
+            'produk_satuan_id.*'   => 'nullable|uuid',
+            'harga_jual'           => 'nullable|array',
+            'harga_jual.*'         => 'nullable|numeric|min:0',
+            'catatan'              => 'nullable|array',
+            'catatan.*'            => 'nullable|string',
+            'is_aktif'             => 'nullable|array',
         ]);
 
         $customer->update([
@@ -144,7 +133,7 @@ class CustomerController extends Controller
             'izin_operasional' => $request->izin_operasional,
         ]);
 
-        // Hapus detail lama, simpan yang baru
+        // Hapus detail lama, simpan ulang
         $customer->detailCustomers()->delete();
         $this->saveDetails($customer, $request);
 
@@ -165,52 +154,51 @@ class CustomerController extends Controller
     // Private Helper
     // =========================================================
 
+    /**
+     * Simpan detail produk customer.
+     * Kolom yang disimpan sesuai schema detail_customers:
+     *   customer_id, produk_id, produk_satuan_id, harga_jual, is_aktif, catatan
+     *
+     * Constraint unique: (customer_id, produk_id, produk_satuan_id)
+     * → pakai updateOrCreate agar tidak duplikat.
+     */
     private function saveDetails(Customer $customer, Request $request): void
     {
-        if (!$request->has('jenis') || !is_array($request->jenis)) {
+        $produkIds = $request->input('produk_id', []);
+
+        if (empty($produkIds)) {
             return;
         }
 
-        foreach ($request->jenis as $i => $jenis) {
-            $productId  = $request->product_id[$i] ?? null;
-            $namaBarang = null;
-            $merk       = $request->merk[$i] ?? null;
-            $satuan     = $request->satuan[$i] ?? null;
-            $hargaJual  = $request->harga_jual[$i] ?? 0;
-
-            if ($productId) {
-                $produk = Produk::find($productId);
-                if ($produk) {
-                    $namaBarang = $produk->nama_produk;
-                    $merk       = $merk   ?: $produk->merk;
-                    $satuan     = $satuan ?: $produk->satuan;
-                    // Gunakan harga_jual dari produk jika tidak diisi manual
-                    $hargaJual  = $hargaJual ?: ($produk->harga_jual ?? 0);
-                }
-            } else {
-                $namaBarang = $request->nama_manual[$i] ?? null;
-                $productId  = null;
-            }
-
-            if (!$namaBarang) {
+        foreach ($produkIds as $i => $produkId) {
+            // Hanya proses baris yang memiliki produk_id
+            if (empty($produkId)) {
                 continue;
             }
 
-            $customer->detailCustomers()->create([
-                'product_id'     => $productId,
-                'no_batch'       => $request->no_batch[$i] ?? null,
-                'judul'          => $request->judul[$i] ?? '-',
-                'nama'           => $namaBarang,
-                'jenis'          => $jenis,
-                'merk'           => $merk,
-                'satuan'         => $satuan,
-                'exp_date'       => $request->exp_date[$i] ?? null,
-                'stock_live'     => $request->stock_live[$i] ?? 0,
-                'stock_po'       => $request->stock_po[$i] ?? 0,
-                'min_persediaan' => $request->min_persediaan[$i] ?? 0,
-                'harga_jual'     => str_replace('.', '', $hargaJual),
-                'kode_rak'       => $request->kode_rak[$i] ?? null,
-            ]);
+            $produkSatuanId = $request->input("produk_satuan_id.{$i}") ?: null;
+            $hargaJual      = $request->input("harga_jual.{$i}", 0);
+            $catatan        = $request->input("catatan.{$i}") ?: null;
+
+            // Bersihkan format rupiah (titik ribuan)
+            $hargaJual = str_replace('.', '', $hargaJual);
+
+            // Checkbox is_aktif: hanya terkirim jika dicentang
+            $isAktif = isset($request->is_aktif[$i]) ? true : false;
+
+            // updateOrCreate untuk menghindari duplicate unique constraint
+            // (customer_id, produk_id, produk_satuan_id)
+            $customer->detailCustomers()->updateOrCreate(
+                [
+                    'produk_id'        => $produkId,
+                    'produk_satuan_id' => $produkSatuanId,
+                ],
+                [
+                    'harga_jual' => is_numeric($hargaJual) ? $hargaJual : 0,
+                    'is_aktif'   => $isAktif,
+                    'catatan'    => $catatan,
+                ]
+            );
         }
     }
 }

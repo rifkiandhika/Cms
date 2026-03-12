@@ -12,7 +12,10 @@ class JadwalKaryawan extends Model
 
     protected $table = 'jadwal_karyawan';
 
+    protected $guarded = [];
+
     protected $fillable = [
+        'sop_id',
         'tanggal',
         'nama_acara',
         'deskripsi',

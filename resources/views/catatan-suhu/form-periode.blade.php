@@ -7,6 +7,7 @@
 <div class="row g-3">
     <div class="col-md-4">
         <label class="form-label fw-bold">Periode <span class="text-danger">*</span></label>
+        <input type="hidden" name="sop_id" value="{{ old('sop_id', request('sop_id') ?? $kontrolGudang->sop_id ?? '') }}">
         <input type="text" name="periode" class="form-control"
                placeholder="e.g. September 2023"
                value="{{ old('periode', $kontrolGudang->periode ?? '') }}" required>

@@ -90,30 +90,47 @@ return new class extends Migration
         Schema::create('retur_items', function (Blueprint $table) {
             $table->uuid('id_retur_item')->primary();
             $table->uuid('id_retur');
-            
-            // Referensi ke item asli
+
             $table->uuid('id_item_sumber')->comment('ID PO Item atau Detail Stock Apotik');
             $table->uuid('id_produk');
             $table->string('nama_produk', 200);
-            
-            // Quantity
-            $table->integer('qty_diretur')->comment('Jumlah yang diretur');
-            $table->integer('qty_diterima_kembali')->default(0)->comment('Jumlah yang sudah diterima kembali');
-            
-            // Harga & Nilai
+
+            // ← TAMBAHAN: informasi satuan saat retur
+            $table->foreignUuid('produk_satuan_id')
+                ->nullable()
+                ->nullOnDelete()
+                ->comment('Satuan yang dipakai saat retur (misal: BOX atau PCS)');
+            $table->bigInteger('konversi_snapshot')->default(1)
+                ->comment('Nilai konversi saat retur terjadi, disimpan permanen untuk audit');
+
+            // Qty dalam satuan transaksi (misal: 2 BOX)
+            $table->integer('qty_diretur')
+                ->comment('Jumlah yang diretur dalam satuan transaksi');
+            $table->integer('qty_diterima_kembali')->default(0)
+                ->comment('Jumlah yang sudah diterima kembali, dalam satuan transaksi');
+
+            // ← TAMBAHAN: qty dalam PCS — ini yang dipakai update stok gudang
+            $table->bigInteger('qty_diretur_satuan_dasar')->default(0)
+                ->comment('qty_diretur x konversi_snapshot = PCS yang masuk/keluar dari stok');
+            $table->bigInteger('qty_diterima_kembali_satuan_dasar')->default(0)
+                ->comment('qty_diterima_kembali x konversi_snapshot');
+
             $table->decimal('harga_satuan', 15, 2)->default(0);
             $table->decimal('subtotal_retur', 15, 2)->default(0);
-            
-            // Kondisi & Detail
+
+            // ← TAMBAHAN: info batch langsung di sini untuk kasus retur sederhana
+            $table->string('no_batch', 50)->nullable();
+            $table->date('tanggal_kadaluarsa')->nullable();
+
             $table->enum('kondisi_barang', ['rusak', 'kadaluarsa', 'baik'])->default('rusak');
             $table->text('catatan_item')->nullable();
-            
             $table->timestamps();
-            
+
             $table->foreign('id_retur')->references('id_retur')->on('returs')->onDelete('cascade');
-            
+
             $table->index('id_retur');
             $table->index('id_item_sumber');
+            $table->index('id_produk');
         });
 
         // Detail batch untuk retur

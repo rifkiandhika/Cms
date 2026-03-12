@@ -11,38 +11,30 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('tagihan_po', function (Blueprint $table) {
+       Schema::create('tagihan_po', function (Blueprint $table) {
             $table->uuid('id_tagihan')->primary();
-            $table->string('no_tagihan', 50)->unique(); // Format: TAG-YYYYMMDD-XXX
+            $table->string('no_tagihan', 50)->unique();
             $table->uuid('id_po');
             $table->uuid('id_relasi');
             $table->enum('tipe_relasi', ['customer', 'supplier']);
 
-            // Status tagihan
             $table->enum('status', [
-                'draft',
-                'menunggu_pembayaran',
-                'dibayar_sebagian',
-                'lunas',
-                'dibatalkan'
+                'draft', 'menunggu_pembayaran', 'dibayar_sebagian', 'lunas', 'dibatalkan'
             ])->default('draft');
 
-            // Informasi keuangan
-            $table->decimal('total_tagihan', 15, 2)->default(0); // Total sebelum pajak
+            $table->decimal('total_tagihan', 15, 2)->default(0);
             $table->decimal('pajak', 15, 2)->default(0);
-            $table->decimal('grand_total', 15, 2)->default(0); // Total setelah pajak
-            $table->decimal('total_dibayar', 15, 2)->default(0); // Akumulasi pembayaran
-            $table->decimal('sisa_tagihan', 15, 2)->default(0); // Sisa yang belum dibayar
+            $table->decimal('grand_total', 15, 2)->default(0);
+            $table->decimal('total_dibayar', 15, 2)->default(0);
+            // ← HAPUS sisa_tagihan — hitung dengan: grand_total - total_dibayar
 
-            // Informasi pembayaran
-            $table->date('tanggal_tagihan')->nullable(); // Saat barang diterima
-            $table->date('tanggal_jatuh_tempo')->nullable(); // Batas waktu bayar
-            $table->integer('tenor_hari')->default(30); // Default 30 hari
+            $table->date('tanggal_tagihan')->nullable();
+            $table->date('tanggal_jatuh_tempo')->nullable();
+            $table->integer('tenor_hari')->default(30);
 
-            // Tracking
-            $table->uuid('id_karyawan_buat')->nullable(); // Yang buat tagihan (sistem/karyawan)
+            $table->uuid('id_karyawan_buat')->nullable();
             $table->timestamp('tanggal_dibuat')->nullable();
-            $table->uuid('id_karyawan_approve')->nullable(); // Finance yang approve
+            $table->uuid('id_karyawan_approve')->nullable();
             $table->timestamp('tanggal_approve')->nullable();
             $table->text('catatan')->nullable();
 

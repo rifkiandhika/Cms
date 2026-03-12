@@ -10,18 +10,18 @@ class ProdukSatuan extends Model
     use HasUuids;
 
     protected $table = 'produk_satuans';
-
     protected $guarded = [];
 
     protected $casts = [
-        'harga_otomatis' => 'boolean',
-        'is_default'     => 'boolean',
-        'isi'            => 'decimal:4',
-        'harga_beli'     => 'decimal:2',
-        'harga_jual'     => 'decimal:2',
+        'is_default' => 'boolean',
+        'konversi'   => 'integer',
+        // ← HAPUS: harga_otomatis, isi, harga_beli, harga_jual
+        // Kolom-kolom itu tidak ada di schema produk_satuans.
+        // harga_beli ada di detail_suppliers, harga_jual di detail_customers
     ];
 
-    // Relasi
+    // ── Relasi ──────────────────────────────────────────
+
     public function produk()
     {
         return $this->belongsTo(Produk::class);
@@ -32,30 +32,61 @@ class ProdukSatuan extends Model
         return $this->belongsTo(Satuan::class);
     }
 
-    // Accessor: harga jual final (otomatis atau manual)
-    public function getHargaJualFinalAttribute(): float
+    public function detailSuppliers()
     {
-        if ($this->harga_otomatis && $this->produk) {
-            return (float) $this->produk->harga_dasar * (float) $this->isi;
-        }
-        return (float) $this->harga_jual;
+        return $this->hasMany(DetailSupplier::class);
     }
 
-    public function getHargaBeliFinalAttribute(): float
+    public function detailCustomers()
     {
-        if ($this->harga_otomatis && $this->produk) {
-            return (float) $this->produk->harga_beli * (float) $this->isi;
-        }
-        return (float) $this->harga_beli;
+        return $this->hasMany(DetailCustomer::class);
     }
 
-    // Hitung subtotal untuk qty tertentu
-    public function hitungSubtotal(float $qty): array
+    // ── Scope ────────────────────────────────────────────
+
+    /**
+     * Lookup satuan berdasarkan scan barcode.
+     * Contoh: ProdukSatuan::findByBarcode('8991234567890')
+     *         → return ProdukSatuan (BOX, konversi 50) beserta produknya
+     *
+     * Usage: ProdukSatuan::with('produk')->findByBarcode($kodeBarcode)
+     */
+    public function scopeFindByBarcode($query, string $barcode)
+    {
+        return $query->where('kode_barcode', $barcode);
+    }
+
+    // ── Accessor ─────────────────────────────────────────
+
+    // ← HAPUS: getHargaJualFinalAttribute & getHargaBeliFinalAttribute
+    // Accessor ini bergantung pada kolom harga_otomatis, harga_dasar, isi
+    // yang tidak ada di schema. Harga diambil dari detail_suppliers/detail_customers.
+
+    /**
+     * Hitung qty dalam satuan dasar (PCS) untuk qty satuan ini.
+     * Contoh: qty=2 BOX, konversi=50 → hasil 100 PCS
+     */
+    public function hitungQtySatuanDasar(float $qty): int
+    {
+        return (int) ($qty * $this->konversi);
+    }
+
+    /**
+     * Hitung subtotal untuk qty tertentu berdasarkan harga yang diberikan.
+     * Harga harus diambil dari detail_suppliers atau detail_customers.
+     */
+    public function hitungSubtotal(float $qty, float $hargaPerSatuan): array
     {
         return [
-            'harga_jual'       => $this->harga_jual_final,
-            'subtotal'         => $this->harga_jual_final * $qty,
-            'qty_satuan_dasar' => $qty * (float) $this->isi,
+            'subtotal'         => $hargaPerSatuan * $qty,
+            'qty_satuan_dasar' => $this->hitungQtySatuanDasar($qty),
         ];
+    }
+
+    public function getLabelAttribute(): string
+    {
+        $namaSatuan = $this->satuan?->nama_satuan ?? '-';
+        $konversi   = $this->konversi ?? 1;
+        return "{$namaSatuan} ({$konversi} satuan dasar)";
     }
 }

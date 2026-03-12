@@ -54,7 +54,9 @@
                 <form id="jadwalForm" enctype="multipart/form-data">
                     <input type="hidden" id="jadwalId" name="jadwal_id">
                     <input type="hidden" id="formMode" value="create">
-                    
+                    {{-- ✅ TAMBAHAN: hidden input sop_id --}}
+                    <input type="hidden" id="sopId" name="sop_id" value="{{ $sop->id }}">
+
                     {{-- Info Acara --}}
                     <div class="mb-3">
                         <label class="form-label fw-bold">Tanggal <span class="text-danger">*</span></label>
@@ -63,13 +65,13 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Nama Acara <span class="text-danger">*</span></label>
-                        <input type="text" name="nama_acara" id="nama_acara" class="form-control" 
+                        <input type="text" name="nama_acara" id="nama_acara" class="form-control"
                                placeholder="e.g. Training Karyawan Baru" required>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Deskripsi</label>
-                        <textarea name="deskripsi" id="deskripsi" class="form-control" rows="2" 
+                        <textarea name="deskripsi" id="deskripsi" class="form-control" rows="2"
                                   placeholder="Deskripsi singkat acara..."></textarea>
                     </div>
 
@@ -87,7 +89,7 @@
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Lokasi</label>
-                            <input type="text" name="lokasi" id="lokasi" class="form-control" 
+                            <input type="text" name="lokasi" id="lokasi" class="form-control"
                                    placeholder="e.g. Ruang Meeting A">
                         </div>
                         <div class="col-md-6">
@@ -159,7 +161,6 @@
 </div>
 
 @push('styles')
-<link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css' rel='stylesheet' />
 <style>
     #calendar {
         max-width: 100%;
@@ -197,23 +198,11 @@
         vertical-align: middle;
     }
 
-    .schedule-count-badge.status-scheduled {
-        background: #0d6efd;
-    }
-
-    .schedule-count-badge.status-ongoing {
-        background: #ffc107;
-    }
-
-    .schedule-count-badge.status-completed {
-        background: #198754;
-    }
-
-    .schedule-count-badge.status-cancelled {
-        background: #dc3545;
-    }
-
-    .schedule-count-badge.status-multiple {
+    .schedule-count-badge.status-scheduled { background: #0d6efd; }
+    .schedule-count-badge.status-ongoing   { background: #ffc107; }
+    .schedule-count-badge.status-completed { background: #198754; }
+    .schedule-count-badge.status-cancelled { background: #dc3545; }
+    .schedule-count-badge.status-multiple  {
         background: linear-gradient(135deg, #0d6efd, #ffc107, #198754);
     }
 
@@ -257,9 +246,7 @@
         border-radius: 4px;
     }
 
-    .swal2-popup {
-        font-size: 0.9rem;
-    }
+    .swal2-popup { font-size: 0.9rem; }
 
     .jadwal-list-item {
         cursor: pointer;
@@ -284,7 +271,7 @@
 @endpush
 
 @push('scripts')
-<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+<script src='{{ asset('assets/js/calendar.min.js') }}'></script>
 <script>
 $(document).ready(function() {
     let calendar;
@@ -302,14 +289,10 @@ $(document).ready(function() {
 
     function initCalendar() {
         const calendarEl = document.getElementById('calendar');
-        
+
         calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: 'dayGridMonth',
-            headerToolbar: {
-                left: 'title',
-                center: '',
-                right: ''
-            },
+            headerToolbar: { left: 'title', center: '', right: '' },
             eventDisplay: 'none',
             locale: 'id',
             firstDay: 1,
@@ -325,9 +308,7 @@ $(document).ready(function() {
                 handleEventClick(info.event.id);
             },
             loading: function(isLoading) {
-                if (!isLoading) {
-                    setTimeout(renderAllBadges, 100);
-                }
+                if (!isLoading) setTimeout(renderAllBadges, 100);
             }
         });
 
@@ -336,19 +317,16 @@ $(document).ready(function() {
 
     function loadJadwalCalendar(startDate, endDate, successCallback, failureCallback) {
         const formatDate = (date) => {
-            const year = date.getFullYear();
+            const year  = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
+            const day   = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
 
         $.ajax({
             url: '/jadwal-karyawan/calendar',
             method: 'GET',
-            data: { 
-                start: formatDate(startDate),
-                end: formatDate(endDate)
-            },
+            data: { start: formatDate(startDate), end: formatDate(endDate) },
             success: function(events) {
                 calculateScheduleCounts(events);
                 successCallback([]);
@@ -364,17 +342,11 @@ $(document).ready(function() {
 
     function calculateScheduleCounts(events) {
         scheduleCounts = {};
-        
         events.forEach(function(event) {
             const dateStr = event.start;
-            
             if (!scheduleCounts[dateStr]) {
-                scheduleCounts[dateStr] = {
-                    count: 0,
-                    statuses: []
-                };
+                scheduleCounts[dateStr] = { count: 0, statuses: [] };
             }
-            
             scheduleCounts[dateStr].count++;
             scheduleCounts[dateStr].statuses.push(event.extendedProps.status);
         });
@@ -383,31 +355,29 @@ $(document).ready(function() {
     function renderAllBadges() {
         $('.schedule-count-badge').remove();
         $('.fc-daygrid-day').removeClass('has-schedule');
-        
+
         $('.fc-daygrid-day').each(function() {
             const dateStr = $(this).attr('data-date');
-            
             if (!dateStr) return;
-            
+
             if (scheduleCounts[dateStr] && scheduleCounts[dateStr].count > 0) {
-                const count = scheduleCounts[dateStr].count;
-                const statuses = scheduleCounts[dateStr].statuses;
-                
+                const count         = scheduleCounts[dateStr].count;
+                const statuses      = scheduleCounts[dateStr].statuses;
                 const uniqueStatuses = [...new Set(statuses)];
-                let statusClass = 'status-multiple';
-                
+                let statusClass     = 'status-multiple';
+
                 if (uniqueStatuses.length === 1) {
                     statusClass = 'status-' + uniqueStatuses[0];
                 }
-                
+
                 $(this).addClass('has-schedule');
-                
+
                 const badge = $('<span>')
                     .addClass('schedule-count-badge')
                     .addClass(statusClass)
                     .text(count)
                     .attr('title', count + ' jadwal');
-                
+
                 const dayNumber = $(this).find('.fc-daygrid-day-number');
                 if (dayNumber.length > 0) {
                     dayNumber.prepend(badge);
@@ -441,34 +411,28 @@ $(document).ready(function() {
 
     function showJadwalList(jadwals, dateStr) {
         const formatDate = new Date(dateStr).toLocaleDateString('id-ID', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
         });
 
         let listHTML = `<div class="mb-3"><strong>Jadwal pada ${formatDate}:</strong></div>`;
-        
+
         jadwals.forEach(function(jadwal) {
             const statusBadge = getStatusBadge(jadwal.status);
-            const waktu = jadwal.waktu_mulai ? `<small class="text-muted"><i class="ri-time-line"></i> ${jadwal.waktu_mulai.substring(0,5)}</small>` : '';
-            const peserta = jadwal.peserta && jadwal.peserta.length > 0 ? 
-                `<small class="text-muted"><i class="ri-team-line"></i> ${jadwal.peserta.length} orang</small>` : 
-                '<small class="text-muted"><i class="ri-team-line"></i> Belum ada peserta</small>';
-            
+            const waktu = jadwal.waktu_mulai
+                ? `<small class="text-muted"><i class="ri-time-line"></i> ${jadwal.waktu_mulai.substring(0,5)}</small>`
+                : '';
+            const peserta = jadwal.peserta && jadwal.peserta.length > 0
+                ? `<small class="text-muted"><i class="ri-team-line"></i> ${jadwal.peserta.length} orang</small>`
+                : '<small class="text-muted"><i class="ri-team-line"></i> Belum ada peserta</small>';
+
             listHTML += `
                 <div class="jadwal-list-item border rounded p-3 mb-2" data-jadwal-id="${jadwal.id}">
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
                             <h6 class="mb-1">${jadwal.nama_acara}</h6>
-                            <div class="d-flex gap-3">
-                                ${waktu}
-                                ${peserta}
-                            </div>
+                            <div class="d-flex gap-3">${waktu}${peserta}</div>
                         </div>
-                        <div>
-                            ${statusBadge}
-                        </div>
+                        <div>${statusBadge}</div>
                     </div>
                 </div>
             `;
@@ -507,7 +471,7 @@ $(document).ready(function() {
     function getStatusBadge(status) {
         const badges = {
             'scheduled': '<span class="badge bg-primary">Scheduled</span>',
-            'ongoing': '<span class="badge bg-warning">Ongoing</span>',
+            'ongoing':   '<span class="badge bg-warning">Ongoing</span>',
             'completed': '<span class="badge bg-success">Completed</span>',
             'cancelled': '<span class="badge bg-danger">Cancelled</span>'
         };
@@ -520,19 +484,10 @@ $(document).ready(function() {
             method: 'GET',
             success: function(jadwal) {
                 fillFormWithData(jadwal);
-                
-                $('html, body').animate({
-                    scrollTop: $('#jadwalForm').offset().top - 100
-                }, 500);
+                $('html, body').animate({ scrollTop: $('#jadwalForm').offset().top - 100 }, 500);
             },
-            error: function(xhr) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Gagal!',
-                    text: 'Gagal memuat data jadwal',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
+            error: function() {
+                Swal.fire({ icon: 'error', title: 'Gagal!', text: 'Gagal memuat data jadwal', timer: 2000, showConfirmButton: false });
             }
         });
     }
@@ -540,12 +495,12 @@ $(document).ready(function() {
     function fillFormWithData(jadwal) {
         $('#formMode').val('edit');
         $('#jadwalId').val(jadwal.id);
-        
+
         let tanggalValue = jadwal.tanggal;
         if (tanggalValue && tanggalValue.length === 10) {
             $('#tanggal').val(tanggalValue);
         }
-        
+
         $('#nama_acara').val(jadwal.nama_acara);
         $('#deskripsi').val(jadwal.deskripsi);
         $('#waktu_mulai').val(jadwal.waktu_mulai ? jadwal.waktu_mulai.substring(0, 5) : '');
@@ -558,7 +513,7 @@ $(document).ready(function() {
 
         $('#karyawanContainer').html('');
         karyawanCounter = 0;
-        
+
         if (jadwal.peserta && jadwal.peserta.length > 0) {
             jadwal.peserta.forEach(function(peserta) {
                 addKaryawanItem(peserta);
@@ -581,46 +536,46 @@ $(document).ready(function() {
                             <i class="ri-close-line"></i>
                         </button>
                     </div>
-                    
+
                     <div class="mb-2">
                         <label class="form-label small fw-bold">Nama Karyawan</label>
-                        <input type="text" name="peserta[${index}][nama_karyawan]" class="form-control form-control-sm" 
+                        <input type="text" name="peserta[${index}][nama_karyawan]" class="form-control form-control-sm"
                                value="${data ? data.nama_karyawan : ''}" placeholder="Nama lengkap karyawan">
                         ${data ? `<input type="hidden" name="peserta[${index}][id]" value="${data.id}">` : ''}
                     </div>
 
                     <div class="mb-2">
                         <label class="form-label small fw-bold">Catatan</label>
-                        <textarea name="peserta[${index}][catatan]" class="form-control form-control-sm" rows="2" 
+                        <textarea name="peserta[${index}][catatan]" class="form-control form-control-sm" rows="2"
                                   placeholder="Catatan evaluasi...">${data ? data.catatan || '' : ''}</textarea>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-2">
                             <label class="form-label small fw-bold">Nilai Kinerja (1-100)</label>
-                            <input type="number" name="peserta[${index}][nilai]" class="form-control form-control-sm" 
+                            <input type="number" name="peserta[${index}][nilai]" class="form-control form-control-sm"
                                    value="${data ? data.nilai || '' : ''}" min="0" max="100" placeholder="0-100">
                         </div>
                         <div class="col-md-6 mb-2">
                             <label class="form-label small fw-bold">Status Kehadiran</label>
                             <select name="peserta[${index}][status_kehadiran]" class="form-select form-select-sm">
-                                <option value="hadir" ${data && data.status_kehadiran === 'hadir' ? 'selected' : ''}>Hadir</option>
+                                <option value="hadir"       ${data && data.status_kehadiran === 'hadir'       ? 'selected' : ''}>Hadir</option>
                                 <option value="tidak_hadir" ${data && data.status_kehadiran === 'tidak_hadir' ? 'selected' : ''}>Tidak Hadir</option>
-                                <option value="izin" ${data && data.status_kehadiran === 'izin' ? 'selected' : ''}>Izin</option>
-                                <option value="sakit" ${data && data.status_kehadiran === 'sakit' ? 'selected' : ''}>Sakit</option>
+                                <option value="izin"        ${data && data.status_kehadiran === 'izin'        ? 'selected' : ''}>Izin</option>
+                                <option value="sakit"       ${data && data.status_kehadiran === 'sakit'       ? 'selected' : ''}>Sakit</option>
                             </select>
                         </div>
                     </div>
 
                     <div class="mb-2">
                         <label class="form-label small fw-bold">Upload Bukti (Gambar)</label>
-                        <input type="file" name="peserta[${index}][bukti]" class="form-control form-control-sm bukti-upload" 
+                        <input type="file" name="peserta[${index}][bukti]" class="form-control form-control-sm bukti-upload"
                                accept="image/*" data-index="${index}">
                         <small class="text-muted">Format: JPG, PNG, GIF (Max: 2MB)</small>
                         ${data && data.bukti ? `
                             <div class="mt-2 bukti-preview-container" id="bukti-preview-${index}">
-                                <img src="/storage/${data.bukti}" class="img-thumbnail bukti-thumbnail" 
-                                    style="max-width: 150px; cursor: pointer;" 
+                                <img src="/storage/${data.bukti}" class="img-thumbnail bukti-thumbnail"
+                                    style="max-width: 150px; cursor: pointer;"
                                     onclick="showBuktiModal('/storage/${data.bukti}', '${data.nama_karyawan}')">
                                 <button type="button" class="btn btn-sm btn-danger mt-1 remove-bukti" data-index="${index}">
                                     <i class="ri-delete-bin-line"></i> Hapus Bukti
@@ -647,42 +602,26 @@ $(document).ready(function() {
     // Handle bukti upload preview
     $(document).on('change', '.bukti-upload', function(e) {
         const index = $(this).data('index');
-        const file = e.target.files[0];
-        
+        const file  = e.target.files[0];
+
         if (file) {
-            // Validasi ukuran file (max 2MB)
             if (file.size > 2048000) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'File Terlalu Besar',
-                    text: 'Ukuran file maksimal 2MB',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
+                Swal.fire({ icon: 'error', title: 'File Terlalu Besar', text: 'Ukuran file maksimal 2MB', timer: 2000, showConfirmButton: false });
                 $(this).val('');
                 return;
             }
-            
-            // Validasi tipe file
+
             const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
             if (!validTypes.includes(file.type)) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Format File Salah',
-                    text: 'Hanya menerima file gambar (JPG, PNG, GIF)',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
+                Swal.fire({ icon: 'error', title: 'Format File Salah', text: 'Hanya menerima file gambar (JPG, PNG, GIF)', timer: 2000, showConfirmButton: false });
                 $(this).val('');
                 return;
             }
-            
-            // Preview image
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 const previewContainer = $(`#bukti-preview-${index}`);
                 const img = previewContainer.find('.bukti-thumbnail');
-                
                 img.attr('src', e.target.result);
                 img.attr('onclick', `showBuktiModal('${e.target.result}', 'Preview Bukti')`);
                 previewContainer.show();
@@ -694,46 +633,30 @@ $(document).ready(function() {
     // Handle remove bukti
     $(document).on('click', '.remove-bukti', function() {
         const index = $(this).data('index');
-        
+
         Swal.fire({
-            title: 'Hapus Bukti?',
-            text: 'Bukti gambar akan dihapus',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Ya, Hapus!',
-            cancelButtonText: 'Batal'
+            title: 'Hapus Bukti?', text: 'Bukti gambar akan dihapus', icon: 'warning',
+            showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Ya, Hapus!', cancelButtonText: 'Batal'
         }).then((result) => {
             if (result.isConfirmed) {
-                // Clear file input
                 $(`input[name="peserta[${index}][bukti]"]`).val('');
-                
-                // Hide preview
                 $(`#bukti-preview-${index}`).hide();
                 $(`#bukti-preview-${index} img`).attr('src', '');
-                
-                // Set flag untuk hapus bukti di backend (untuk mode edit)
+
                 if ($('#formMode').val() === 'edit') {
                     $(`<input type="hidden" name="peserta[${index}][remove_bukti]" value="1">`).insertAfter(`input[name="peserta[${index}][bukti]"]`);
                 }
-                
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Bukti dihapus!',
-                    timer: 1500,
-                    showConfirmButton: false
-                });
+
+                Swal.fire({ icon: 'success', title: 'Bukti dihapus!', timer: 1500, showConfirmButton: false });
             }
         });
     });
 
-    // Function to show modal (global function)
     window.showBuktiModal = function(imageUrl, karyawanName) {
         $('#modalKaryawanName').text(karyawanName);
         $('#modalBuktiImage').attr('src', imageUrl);
         $('#downloadBukti').attr('href', imageUrl);
-        
         const modal = new bootstrap.Modal(document.getElementById('buktiModal'));
         modal.show();
     };
@@ -751,152 +674,121 @@ $(document).ready(function() {
         });
     }
 
-    // Submit form with FormData for file upload
     // Submit form
     $('#jadwalForm').submit(function(e) {
         e.preventDefault();
-        
-        const mode = $('#formMode').val();
+
+        const mode     = $('#formMode').val();
         const jadwalId = $('#jadwalId').val();
-        
-        // PERBAIKAN: Gunakan FormData untuk handle file upload
+
         const formData = new FormData();
-        
-        // Add basic fields
-        formData.append('tanggal', $('#tanggal').val());
-        formData.append('nama_acara', $('#nama_acara').val());
-        formData.append('deskripsi', $('#deskripsi').val());
-        formData.append('waktu_mulai', $('#waktu_mulai').val());
+
+        // ✅ Basic fields
+        formData.append('tanggal',      $('#tanggal').val());
+        formData.append('nama_acara',   $('#nama_acara').val());
+        formData.append('deskripsi',    $('#deskripsi').val());
+        formData.append('waktu_mulai',  $('#waktu_mulai').val());
         formData.append('waktu_selesai', $('#waktu_selesai').val());
-        formData.append('lokasi', $('#lokasi').val());
-        formData.append('status', $('#status').val());
-        
-        // Add peserta data with files
+        formData.append('lokasi',       $('#lokasi').val());
+        formData.append('status',       $('#status').val());
+
+        // ✅ PERBAIKAN: baca sop_id dari hidden input, bukan inline blade
+        formData.append('sop_id', $('#sopId').val());
+
+        // Peserta data with files
         let pesertaIndex = 0;
         $('.karyawan-item').each(function() {
-            const index = $(this).data('index');
+            const index        = $(this).data('index');
             const namaKaryawan = $(`input[name="peserta[${index}][nama_karyawan]"]`).val();
-            
+
             if (namaKaryawan) {
                 formData.append(`peserta[${pesertaIndex}][nama_karyawan]`, namaKaryawan);
-                formData.append(`peserta[${pesertaIndex}][catatan]`, $(`textarea[name="peserta[${index}][catatan]"]`).val() || '');
-                formData.append(`peserta[${pesertaIndex}][nilai]`, $(`input[name="peserta[${index}][nilai]"]`).val() || '');
+                formData.append(`peserta[${pesertaIndex}][catatan]`,       $(`textarea[name="peserta[${index}][catatan]"]`).val() || '');
+                formData.append(`peserta[${pesertaIndex}][nilai]`,         $(`input[name="peserta[${index}][nilai]"]`).val() || '');
                 formData.append(`peserta[${pesertaIndex}][status_kehadiran]`, $(`select[name="peserta[${index}][status_kehadiran]"]`).val());
-                
-                // IMPORTANT: Add peserta ID if exists (for edit mode)
+
                 const pesertaId = $(`input[name="peserta[${index}][id]"]`).val();
                 if (pesertaId) {
                     formData.append(`peserta[${pesertaIndex}][id]`, pesertaId);
                 }
-                
-                // IMPORTANT: Add file if exists
+
                 const fileInput = $(`input[name="peserta[${index}][bukti]"]`)[0];
                 if (fileInput && fileInput.files && fileInput.files[0]) {
                     formData.append(`peserta[${pesertaIndex}][bukti]`, fileInput.files[0]);
                 }
-                
-                // Add remove_bukti flag if exists
+
                 const removeBukti = $(`input[name="peserta[${index}][remove_bukti]"]`).val();
                 if (removeBukti) {
                     formData.append(`peserta[${pesertaIndex}][remove_bukti]`, '1');
                 }
-                
+
                 pesertaIndex++;
             }
         });
-        
+
         const url = mode === 'edit' ? `/jadwal-karyawan/${jadwalId}` : '/jadwal-karyawan';
-        
-        // IMPORTANT: Add _method for PUT request (Laravel)
+
         if (mode === 'edit') {
             formData.append('_method', 'PUT');
         }
 
-        // Show loading
         Swal.fire({
-            title: 'Menyimpan...',
-            text: 'Mohon tunggu sebentar',
-            allowOutsideClick: false,
-            showConfirmButton: false,
-            willOpen: () => {
-                Swal.showLoading();
-            }
+            title: 'Menyimpan...', text: 'Mohon tunggu sebentar',
+            allowOutsideClick: false, showConfirmButton: false,
+            willOpen: () => { Swal.showLoading(); }
         });
 
         $.ajax({
             url: url,
-            method: 'POST', // ALWAYS POST when using FormData
+            method: 'POST',
             data: formData,
-            processData: false, // CRITICAL: Don't process the data
-            contentType: false, // CRITICAL: Don't set content type
-            headers: {
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-            },
+            processData: false,
+            contentType: false,
+            headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
             success: function(response) {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Berhasil!',
-                    text: response.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-                
+                Swal.fire({ icon: 'success', title: 'Berhasil!', text: response.message, timer: 2000, showConfirmButton: false });
                 calendar.refetchEvents();
                 resetForm();
             },
             error: function(xhr) {
                 let errorMessage = 'Gagal menyimpan jadwal';
-                
                 if (xhr.responseJSON && xhr.responseJSON.message) {
                     errorMessage = xhr.responseJSON.message;
                 }
-                
-                // Tampilkan error validation jika ada
+
                 if (xhr.responseJSON && xhr.responseJSON.errors) {
-                    let errors = xhr.responseJSON.errors;
+                    let errors    = xhr.responseJSON.errors;
                     let errorList = '<ul style="text-align: left;">';
                     Object.keys(errors).forEach(function(key) {
                         errorList += '<li>' + errors[key][0] + '</li>';
                     });
                     errorList += '</ul>';
-                    
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Validasi Gagal!',
-                        html: errorList,
-                        confirmButtonText: 'OK'
-                    });
+                    Swal.fire({ icon: 'error', title: 'Validasi Gagal!', html: errorList, confirmButtonText: 'OK' });
                 } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Gagal!',
-                        text: errorMessage,
-                        confirmButtonText: 'OK'
-                    });
+                    Swal.fire({ icon: 'error', title: 'Gagal!', text: errorMessage, confirmButtonText: 'OK' });
                 }
+                console.log('Status:', xhr.status);
+                console.log('Response:', xhr.responseText);
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error ' + xhr.status,
+                    text: xhr.responseText.substring(0, 300), // tampilkan 300 char pertama
+                    confirmButtonText: 'OK'
+                });
             }
         });
     });
 
     $('#resetFormBtn').click(function() {
         Swal.fire({
-            title: 'Reset Form?',
-            text: 'Semua data yang belum disimpan akan hilang',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Ya, Reset!',
-            cancelButtonText: 'Batal'
+            title: 'Reset Form?', text: 'Semua data yang belum disimpan akan hilang', icon: 'warning',
+            showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Ya, Reset!', cancelButtonText: 'Batal'
         }).then((result) => {
             if (result.isConfirmed) {
                 resetForm();
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Form direset!',
-                    timer: 1500,
-                    showConfirmButton: false
-                });
+                Swal.fire({ icon: 'success', title: 'Form direset!', timer: 1500, showConfirmButton: false });
             }
         });
     });
@@ -905,33 +797,24 @@ $(document).ready(function() {
         $('#jadwalForm')[0].reset();
         $('#formMode').val('create');
         $('#jadwalId').val('');
+        // ✅ Pastikan sop_id tidak ikut ter-reset
+        $('#sopId').val('{{ $sop->id }}');
         $('#formTitle').html('<i class="ri-add-circle-line me-2"></i>Tambah Jadwal Baru');
         $('.card-header').removeClass('bg-warning').addClass('bg-success');
-        
+
         $('#karyawanContainer').html('');
         karyawanCounter = 0;
-        
-        // Set default date
+
         const today = new Date().toISOString().split('T')[0];
         $('#tanggal').val(today);
     }
 
-    $('#prevMonth').click(function() {
-        calendar.prev();
-    });
-
-    $('#nextMonth').click(function() {
-        calendar.next();
-    });
-
-    $('#todayBtn').click(function() {
-        calendar.today();
-    });
+    $('#prevMonth').click(function() { calendar.prev(); });
+    $('#nextMonth').click(function() { calendar.next(); });
+    $('#todayBtn').click(function()  { calendar.today(); });
 
     window.refreshCalendar = function() {
-        if (calendar) {
-            calendar.refetchEvents();
-        }
+        if (calendar) calendar.refetchEvents();
     };
 });
 </script>

@@ -30,7 +30,10 @@ class PengendalianHamaController extends Controller
 
     public function store(Request $request)
     {
+        // dd($request->all());
         $request->validate([
+            
+            'sop_id' => 'nullable|exists:sops,id',
             'lokasi'          => 'required|string|max:255',
             'bulan'           => 'required|string|max:20',
             'tahun'           => 'required|digits:4',
@@ -49,6 +52,7 @@ class PengendalianHamaController extends Controller
 
         // Simpan header
         $header = PengendalianHama::create([
+            'sop_id' => $request->sop_id ?? null,
             'lokasi'           => $request->lokasi,
             'bulan'            => $request->bulan,
             'tahun'            => $request->tahun,
@@ -112,6 +116,8 @@ class PengendalianHamaController extends Controller
     public function update(Request $request, PengendalianHama $pengendalianHama)
     {
         $request->validate([
+            
+            'sop_id' => 'nullable|exists:sops,id',
             'lokasi'           => 'required|string|max:255',
             'bulan'            => 'required|string|max:20',
             'tahun'            => 'required|digits:4',
@@ -121,7 +127,7 @@ class PengendalianHamaController extends Controller
         ]);
 
         // Update header
-        $pengendalianHama->update($request->only('lokasi', 'bulan', 'tahun', 'penanggung_jawab'));
+        $pengendalianHama->update($request->only('sop_id','lokasi', 'bulan', 'tahun', 'penanggung_jawab'));
 
         // Hapus detail lama, ganti dengan yang baru
         $pengendalianHama->details()->delete();

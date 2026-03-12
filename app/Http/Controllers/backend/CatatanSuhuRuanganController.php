@@ -23,12 +23,15 @@ class CatatanSuhuRuanganController extends Controller
      */
     public function storePeriode(Request $request)
     {
+        // dd($request->all());
         $request->validate([
+            
+            'sop_id' => 'nullable|exists:sops,id',
             'periode'     => 'required|string|max:20',
             'nama_gudang' => 'required|string|max:255',
         ]);
 
-        KontrolGudang::create($request->only('periode', 'nama_gudang'));
+        KontrolGudang::create($request->only('sop_id','periode', 'nama_gudang'));
 
         return redirect()->route('sops.index')
             ->with('success', 'Periode gudang berhasil ditambahkan.');
@@ -58,11 +61,12 @@ class CatatanSuhuRuanganController extends Controller
     public function updatePeriode(Request $request, KontrolGudang $kontrolGudang)
     {
         $request->validate([
+            'sop_id' => 'nullable|exists:sops,id',
             'periode'     => 'required|string|max:20',
             'nama_gudang' => 'required|string|max:255',
         ]);
 
-        $kontrolGudang->update($request->only('periode', 'nama_gudang'));
+        $kontrolGudang->update($request->only('sop_id','periode', 'nama_gudang'));
 
         return redirect()->route('catatan-suhu.show', $kontrolGudang->id)
             ->with('success', 'Periode berhasil diperbarui.');

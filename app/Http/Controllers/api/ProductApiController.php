@@ -10,27 +10,23 @@ class ProductApiController extends Controller
 {
     /**
      * Search produk untuk Select2
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
      */
     public function search(Request $request)
     {
-        $search = $request->input('q', '');
-        $jenis = $request->input('jenis', null);
-        $page = $request->input('page', 1);
-        $perPage = 10;
+        $search   = $request->input('q', '');
+        $jenis    = $request->input('jenis', null);
+        $page     = (int) $request->input('page', 1);
+        $perPage  = 10;
 
-        $query = Produk::where('status', 'aktif');
+        $query = Produk::with(['produkSatuans.satuan'])
+            ->where('status', 'aktif');
 
-        // Filter berdasarkan jenis jika ada
         if ($jenis) {
             $query->where('jenis', $jenis);
         }
 
-        // Search by nama_produk, kode_produk, atau merk
         if (!empty($search)) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('nama_produk', 'LIKE', "%{$search}%")
                   ->orWhere('kode_produk', 'LIKE', "%{$search}%")
                   ->orWhere('merk', 'LIKE', "%{$search}%");
@@ -38,23 +34,31 @@ class ProductApiController extends Controller
         }
 
         $total = $query->count();
-        
-        $produks = $query->select('id', 'kode_produk', 'nama_produk', 'merk', 'jenis', 'satuan', 'harga_beli')
-                        ->orderBy('nama_produk')
-                        ->skip(($page - 1) * $perPage)
-                        ->take($perPage)
-                        ->get();
 
-        $items = $produks->map(function($produk) {
+        $produks = $query->orderBy('nama_produk')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get();
+
+        $items = $produks->map(function ($produk) {
+
+            $satuans = $produk->produkSatuans->map(function ($ps) {
+                return [
+                    'id'         => $ps->id,
+                    'label'      => $ps->label,             // ✅ dari accessor getLabelAttribute()
+                    'isi'        => (int) $ps->konversi,    // ✅ pakai konversi, bukan isi
+                    'is_default' => (bool) $ps->is_default,
+                ];
+            })->values();
+
             return [
-                'id' => $produk->id,
-                'text' => $produk->nama_produk . ' (' . $produk->kode_produk . ')',
-                'kode_produk' => $produk->kode_produk,
-                'nama_produk' => $produk->nama_produk,
-                'merk' => $produk->merk,
-                'jenis' => $produk->jenis,
-                'satuan' => $produk->satuan,
-                'harga_beli' => $produk->harga_beli,
+                'id'             => $produk->id,
+                'text'           => $produk->nama_produk . ' (' . $produk->kode_produk . ')',
+                'kode_produk'    => $produk->kode_produk,
+                'nama_produk'    => $produk->nama_produk,
+                'merk'           => $produk->merk,
+                'jenis'          => $produk->jenis,
+                'produk_satuans' => $satuans,
             ];
         });
 
@@ -66,15 +70,13 @@ class ProductApiController extends Controller
         ]);
     }
 
+
     /**
-     * Get produk by ID
-     * 
-     * @param string $id
-     * @return \Illuminate\Http\JsonResponse
+     * Get detail produk by ID
      */
     public function show($id)
     {
-        $produk = Produk::find($id);
+        $produk = Produk::with(['produkSatuans.satuan'])->find($id);
 
         if (!$produk) {
             return response()->json([
@@ -83,18 +85,58 @@ class ProductApiController extends Controller
             ], 404);
         }
 
+        $satuans = $produk->produkSatuans->map(function ($ps) {
+            return [
+                'id'         => $ps->id,
+                'label'      => $ps->label,             // ✅
+                'isi'        => (int) $ps->konversi,    // ✅
+                'is_default' => (bool) $ps->is_default,
+            ];
+        })->values();
+
         return response()->json([
             'success' => true,
             'data' => [
-                'id' => $produk->id,
+                'id'          => $produk->id,
                 'kode_produk' => $produk->kode_produk,
                 'nama_produk' => $produk->nama_produk,
-                'merk' => $produk->merk,
-                'jenis' => $produk->jenis,
-                'satuan' => $produk->satuan,
-                'harga_beli' => $produk->harga_beli,
-                'harga_jual' => $produk->harga_jual,
+                'merk'        => $produk->merk,
+                'jenis'       => $produk->jenis,
+                'satuans'     => $satuans,
             ]
+        ]);
+    }
+
+
+    /**
+     * Get satuan produk by produk_id
+     */
+    public function getSatuans(Request $request)
+    {
+        $request->validate([
+            'produk_id' => 'required|uuid|exists:produks,id',
+        ]);
+
+        $produk = Produk::with(['produkSatuans.satuan'])
+            ->findOrFail($request->produk_id);
+
+        $satuans = $produk->produkSatuans->map(function ($ps) {
+            return [
+                'id'         => $ps->id,
+                'label'      => $ps->label,             // ✅
+                'isi'        => (int) $ps->konversi,    // ✅
+                'is_default' => (bool) $ps->is_default,
+                'satuan'     => $ps->satuan ? [
+                    'id'          => $ps->satuan->id,
+                    'nama_satuan' => $ps->satuan->nama_satuan,
+                ] : null,
+            ];
+        })->values();
+
+        return response()->json([
+            'produk_id'   => $produk->id,
+            'nama_produk' => $produk->nama_produk,
+            'satuans'     => $satuans,
         ]);
     }
 }

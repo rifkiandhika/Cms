@@ -20,6 +20,7 @@ class TrainingProgramController extends Controller
     public function create()
     {
         return view('training_programs.create');
+        // request('sop_id') otomatis tersedia di blade via request()
     }
 
     public function show(TrainingProgram $trainingProgram)
@@ -39,52 +40,54 @@ class TrainingProgramController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'sop_id'         => 'nullable|exists:sops,id',
+            'title'          => 'required|string|max:255',
             'program_number' => 'required|string|unique:training_programs,program_number',
             'effective_date' => 'nullable|date',
-            'revision' => 'nullable|string',
-            'status' => 'required|in:draft,active,archived',
-            'description' => 'nullable|string',
-            
-            'main_categories' => 'required|array|min:1',
-            'main_categories.*.roman_number' => 'required|string|max:10',
-            'main_categories.*.name' => 'required|string|max:255',
-            'main_categories.*.order' => 'required|integer|min:0',
-            
-            'main_categories.*.sub_categories' => 'required|array|min:1',
-            'main_categories.*.sub_categories.*.letter' => 'required|string|max:10',
-            'main_categories.*.sub_categories.*.name' => 'required|string|max:255',
-            'main_categories.*.sub_categories.*.order' => 'required|integer|min:0',
-            
-            'main_categories.*.sub_categories.*.training_items' => 'required|array|min:1',
-            'main_categories.*.sub_categories.*.training_items.*.number' => 'required|string|max:10',
-            'main_categories.*.sub_categories.*.training_items.*.nama_pelatihan' => 'required|string',
-            'main_categories.*.sub_categories.*.training_items.*.peserta' => 'nullable|string',
-            'main_categories.*.sub_categories.*.training_items.*.instruktur' => 'nullable|string',
-            'main_categories.*.sub_categories.*.training_items.*.metode' => 'nullable|string',
-            'main_categories.*.sub_categories.*.training_items.*.jadwal' => 'nullable|string',
-            'main_categories.*.sub_categories.*.training_items.*.metode_penilaian' => 'nullable|string',
-            'main_categories.*.sub_categories.*.training_items.*.order' => 'required|integer|min:0',
+            'revision'       => 'nullable|string',
+            'status'         => 'required|in:draft,active,archived',
+            'description'    => 'nullable|string',
+
+            'main_categories'                                                          => 'required|array|min:1',
+            'main_categories.*.roman_number'                                           => 'required|string|max:10',
+            'main_categories.*.name'                                                   => 'required|string|max:255',
+            'main_categories.*.order'                                                  => 'required|integer|min:0',
+
+            'main_categories.*.sub_categories'                                         => 'required|array|min:1',
+            'main_categories.*.sub_categories.*.letter'                                => 'required|string|max:10',
+            'main_categories.*.sub_categories.*.name'                                  => 'required|string|max:255',
+            'main_categories.*.sub_categories.*.order'                                 => 'required|integer|min:0',
+
+            'main_categories.*.sub_categories.*.training_items'                        => 'required|array|min:1',
+            'main_categories.*.sub_categories.*.training_items.*.number'               => 'required|string|max:10',
+            'main_categories.*.sub_categories.*.training_items.*.nama_pelatihan'       => 'required|string',
+            'main_categories.*.sub_categories.*.training_items.*.peserta'              => 'nullable|string',
+            'main_categories.*.sub_categories.*.training_items.*.instruktur'           => 'nullable|string',
+            'main_categories.*.sub_categories.*.training_items.*.metode'               => 'nullable|string',
+            'main_categories.*.sub_categories.*.training_items.*.jadwal'               => 'nullable|string',
+            'main_categories.*.sub_categories.*.training_items.*.metode_penilaian'     => 'nullable|string',
+            'main_categories.*.sub_categories.*.training_items.*.order'                => 'required|integer|min:0',
         ]);
 
         DB::beginTransaction();
         try {
             // Create Training Program
             $program = TrainingProgram::create([
-                'title' => $validated['title'],
+                'sop_id'         => $validated['sop_id'] ?? null,
+                'title'          => $validated['title'],
                 'program_number' => $validated['program_number'],
                 'effective_date' => $validated['effective_date'] ?? null,
-                'revision' => $validated['revision'] ?? 'Rev. 00',
-                'status' => $validated['status'],
-                'description' => $validated['description'] ?? null,
+                'revision'       => $validated['revision'] ?? 'Rev. 00',
+                'status'         => $validated['status'],
+                'description'    => $validated['description'] ?? null,
             ]);
 
             // Create Main Categories
             foreach ($validated['main_categories'] as $mcIndex => $mcData) {
                 $mainCategory = $program->mainCategories()->create([
                     'roman_number' => $mcData['roman_number'],
-                    'name' => $mcData['name'],
-                    'order' => $mcData['order'],
+                    'name'         => $mcData['name'],
+                    'order'        => $mcData['order'],
                 ]);
 
                 // Create Sub Categories
@@ -92,31 +95,31 @@ class TrainingProgramController extends Controller
                     foreach ($mcData['sub_categories'] as $scIndex => $scData) {
                         $subCategory = $mainCategory->subCategories()->create([
                             'letter' => $scData['letter'],
-                            'name' => $scData['name'],
-                            'order' => $scData['order'],
+                            'name'   => $scData['name'],
+                            'order'  => $scData['order'],
                         ]);
 
                         // Create Training Items
                         if (isset($scData['training_items'])) {
                             foreach ($scData['training_items'] as $tiIndex => $tiData) {
                                 $trainingItem = $subCategory->trainingItems()->create([
-                                    'number' => $tiData['number'],
-                                    'nama_pelatihan' => $tiData['nama_pelatihan'],
-                                    'peserta' => $tiData['peserta'] ?? null,
-                                    'instruktur' => $tiData['instruktur'] ?? null,
-                                    'metode' => $tiData['metode'] ?? null,
-                                    'jadwal' => $tiData['jadwal'] ?? null,
-                                    'metode_penilaian' => $tiData['metode_penilaian'] ?? null,
-                                    'order' => $tiData['order'],
+                                    'number'            => $tiData['number'],
+                                    'nama_pelatihan'    => $tiData['nama_pelatihan'],
+                                    'peserta'           => $tiData['peserta'] ?? null,
+                                    'instruktur'        => $tiData['instruktur'] ?? null,
+                                    'metode'            => $tiData['metode'] ?? null,
+                                    'jadwal'            => $tiData['jadwal'] ?? null,
+                                    'metode_penilaian'  => $tiData['metode_penilaian'] ?? null,
+                                    'order'             => $tiData['order'],
                                 ]);
 
                                 // Create Details (a, b, c)
                                 if (isset($tiData['details'])) {
                                     foreach ($tiData['details'] as $detailData) {
                                         $trainingItem->details()->create([
-                                            'letter' => $detailData['letter'],
+                                            'letter'  => $detailData['letter'],
                                             'content' => $detailData['content'],
-                                            'order' => $detailData['order'],
+                                            'order'   => $detailData['order'],
                                         ]);
                                     }
                                 }
@@ -125,11 +128,10 @@ class TrainingProgramController extends Controller
                                 if ($request->hasFile("main_categories.{$mcIndex}.sub_categories.{$scIndex}.training_items.{$tiIndex}.images")) {
                                     foreach ($request->file("main_categories.{$mcIndex}.sub_categories.{$scIndex}.training_items.{$tiIndex}.images") as $imgIndex => $image) {
                                         $path = $image->store('training_images', 'public');
-                                        
                                         $trainingItem->images()->create([
                                             'image_path' => $path,
-                                            'caption' => $tiData['captions'][$imgIndex] ?? null,
-                                            'order' => $imgIndex
+                                            'caption'    => $tiData['captions'][$imgIndex] ?? null,
+                                            'order'      => $imgIndex,
                                         ]);
                                     }
                                 }
@@ -137,10 +139,10 @@ class TrainingProgramController extends Controller
                                 // Create Metadata
                                 if (isset($tiData['tanggal_mulai']) || isset($tiData['lokasi']) || isset($tiData['catatan'])) {
                                     $trainingItem->metadata()->create([
-                                        'tanggal_mulai' => $tiData['tanggal_mulai'] ?? null,
-                                        'tanggal_selesai' => $tiData['tanggal_selesai'] ?? null,
-                                        'lokasi' => $tiData['lokasi'] ?? null,
-                                        'catatan' => $tiData['catatan'] ?? null,
+                                        'tanggal_mulai'    => $tiData['tanggal_mulai'] ?? null,
+                                        'tanggal_selesai'  => $tiData['tanggal_selesai'] ?? null,
+                                        'lokasi'           => $tiData['lokasi'] ?? null,
+                                        'catatan'          => $tiData['catatan'] ?? null,
                                     ]);
                                 }
                             }
@@ -149,10 +151,17 @@ class TrainingProgramController extends Controller
                 }
             }
 
+            // ✅ PERBAIKAN: commit DULU sebelum redirect
             DB::commit();
+
+            if (!empty($validated['sop_id'])) {
+                return redirect()->route('sops.show', $validated['sop_id'])
+                    ->with('success', 'Program pelatihan berhasil ditambahkan');
+            }
+
             return redirect()->route('training-programs.index')
                 ->with('success', 'Program pelatihan berhasil ditambahkan');
-                
+
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage())
@@ -165,61 +174,69 @@ class TrainingProgramController extends Controller
         $trainingProgram->load([
             'mainCategories.subCategories.trainingItems.details',
             'mainCategories.subCategories.trainingItems.images',
-            'mainCategories.subCategories.trainingItems.metadata'
+            'mainCategories.subCategories.trainingItems.metadata',
         ]);
-        
+
         return view('training_programs.edit', compact('trainingProgram'));
     }
 
     public function update(Request $request, TrainingProgram $trainingProgram)
     {
-        // Similar to store but with update logic
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'sop_id'         => 'nullable|exists:sops,id',
+            'title'          => 'required|string|max:255',
             'program_number' => 'required|string|unique:training_programs,program_number,' . $trainingProgram->id,
             'effective_date' => 'nullable|date',
-            'revision' => 'nullable|string',
-            'status' => 'required|in:draft,active,archived',
-            'description' => 'nullable|string',
-            
-            'main_categories' => 'required|array|min:1',
-            'main_categories.*.roman_number' => 'required|string|max:10',
-            'main_categories.*.name' => 'required|string|max:255',
-            'main_categories.*.order' => 'required|integer|min:0',
-            
-            'main_categories.*.sub_categories' => 'required|array|min:1',
-            'main_categories.*.sub_categories.*.letter' => 'required|string|max:10',
-            'main_categories.*.sub_categories.*.name' => 'required|string|max:255',
-            'main_categories.*.sub_categories.*.order' => 'required|integer|min:0',
-            
-            'main_categories.*.sub_categories.*.training_items' => 'required|array|min:1',
-            'main_categories.*.sub_categories.*.training_items.*.number' => 'required|string|max:10',
-            'main_categories.*.sub_categories.*.training_items.*.nama_pelatihan' => 'required|string',
-            'main_categories.*.sub_categories.*.training_items.*.peserta' => 'nullable|string',
-            'main_categories.*.sub_categories.*.training_items.*.instruktur' => 'nullable|string',
-            'main_categories.*.sub_categories.*.training_items.*.metode' => 'nullable|string',
-            'main_categories.*.sub_categories.*.training_items.*.jadwal' => 'nullable|string',
-            'main_categories.*.sub_categories.*.training_items.*.metode_penilaian' => 'nullable|string',
-            'main_categories.*.sub_categories.*.training_items.*.order' => 'required|integer|min:0',
+            'revision'       => 'nullable|string',
+            'status'         => 'required|in:draft,active,archived',
+            'description'    => 'nullable|string',
+
+            'main_categories'                                                          => 'required|array|min:1',
+            'main_categories.*.roman_number'                                           => 'required|string|max:10',
+            'main_categories.*.name'                                                   => 'required|string|max:255',
+            'main_categories.*.order'                                                  => 'required|integer|min:0',
+
+            'main_categories.*.sub_categories'                                         => 'required|array|min:1',
+            'main_categories.*.sub_categories.*.letter'                                => 'required|string|max:10',
+            'main_categories.*.sub_categories.*.name'                                  => 'required|string|max:255',
+            'main_categories.*.sub_categories.*.order'                                 => 'required|integer|min:0',
+
+            'main_categories.*.sub_categories.*.training_items'                        => 'required|array|min:1',
+            'main_categories.*.sub_categories.*.training_items.*.number'               => 'required|string|max:10',
+            'main_categories.*.sub_categories.*.training_items.*.nama_pelatihan'       => 'required|string',
+            'main_categories.*.sub_categories.*.training_items.*.peserta'              => 'nullable|string',
+            'main_categories.*.sub_categories.*.training_items.*.instruktur'           => 'nullable|string',
+            'main_categories.*.sub_categories.*.training_items.*.metode'               => 'nullable|string',
+            'main_categories.*.sub_categories.*.training_items.*.jadwal'               => 'nullable|string',
+            'main_categories.*.sub_categories.*.training_items.*.metode_penilaian'     => 'nullable|string',
+            'main_categories.*.sub_categories.*.training_items.*.order'                => 'required|integer|min:0',
         ]);
 
         DB::beginTransaction();
         try {
+            // ✅ PERBAIKAN: gunakan $validated['sop_id'], fallback ke nilai lama
             $trainingProgram->update([
-                'title' => $validated['title'],
+                'sop_id'         => $validated['sop_id'] ?? $trainingProgram->sop_id,
+                'title'          => $validated['title'],
                 'program_number' => $validated['program_number'],
                 'effective_date' => $validated['effective_date'] ?? null,
-                'revision' => $validated['revision'] ?? 'Rev. 00',
-                'status' => $validated['status'],
-                'description' => $validated['description'] ?? null,
+                'revision'       => $validated['revision'] ?? 'Rev. 00',
+                'status'         => $validated['status'],
+                'description'    => $validated['description'] ?? null,
             ]);
 
-            // Delete existing and recreate (simpler approach)
-            // Or implement update logic for existing records
-
+            // ✅ PERBAIKAN: commit DULU sebelum redirect
             DB::commit();
+
+            $sopId = $validated['sop_id'] ?? $trainingProgram->sop_id;
+            if ($sopId) {
+                return redirect()->route('sops.show', $sopId)
+                    ->with('success', 'Program pelatihan berhasil diperbarui');
+            }
+
             return redirect()->route('training-programs.index')
                 ->with('success', 'Program pelatihan berhasil diperbarui');
+
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage())
@@ -241,12 +258,13 @@ class TrainingProgramController extends Controller
                     }
                 }
             }
-            
+
             $trainingProgram->delete();
-            
+
             DB::commit();
             return redirect()->route('training-programs.index')
                 ->with('success', 'Program pelatihan berhasil dihapus');
+
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
@@ -268,26 +286,11 @@ class TrainingProgramController extends Controller
             ->setPaper('a4', 'landscape')
             ->setOptions([
                 'isHtml5ParserEnabled' => true,
-                'isRemoteEnabled' => true,
-                'defaultFont' => 'Arial'
+                'isRemoteEnabled'      => true,
+                'defaultFont'          => 'Arial',
             ]);
 
-        // WAJIB render dulu
         $pdf->render();
-
-        // Ambil canvas
-        // $canvas = $pdf->getDomPDF()->getCanvas();
-        // $font = $pdf->getDomPDF()->getFontMetrics()->get_font("Arial", "normal");
-
-        // // Posisi landscape A4 (sesuaikan jika perlu)
-        // // $canvas->page_text(
-        // //     720,  // X (kanan)
-        // //     570,  // Y (bawah)
-        // //     "Halaman {PAGE_NUM} dari {PAGE_COUNT}",
-        // //     $font,
-        // //     8,
-        // //     [0, 0, 0]
-        // // );
 
         $filename = 'program-pelatihan-' . str_replace(['/', '\\', ' '], '-', $trainingProgram->program_number) . '.pdf';
 

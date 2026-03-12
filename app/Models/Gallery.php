@@ -9,7 +9,8 @@ class Gallery extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['judul', 'deskripsi'];
+    protected $guarded = [];
+    protected $fillable = ['sop_id','judul', 'deskripsi'];
 
     public function images()
     {

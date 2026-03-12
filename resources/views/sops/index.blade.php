@@ -83,37 +83,37 @@
 
                 {{-- TAB 2: JADWAL KARYAWAN --}}
                 <div class="tab-pane fade" id="jadwal-content" role="tabpanel">
-                    @include('sops.partials.jadwal-karyawan')
+                    @include('sops.index.jadwal-karyawan')
                 </div>
 
                 {{-- TAB 3: PROGRAM PELATIHAN --}}
                 <div class="tab-pane fade" id="program-pelatihan-content" role="tabpanel">
-                    @include('sops.partials.program-pelatihan')
+                    @include('sops.index.program-pelatihan')
                 </div>
 
                 {{-- TAB 4: DAFTAR HADIR --}}
                 <div class="tab-pane fade" id="daftar-hadir-content" role="tabpanel">
-                    @include('sops.partials.daftar-hadir')
+                    @include('sops.index.daftar-hadir')
                 </div>
 
                 {{-- TAB 5: EVALUASI --}}
                 <div class="tab-pane fade" id="evaluasi-content" role="tabpanel">
-                    @include('sops.partials.evaluasi')
+                    @include('sops.index.evaluasi')
                 </div>
 
                 {{-- TAB 6: GALERI --}}
                 <div class="tab-pane fade" id="gallery-content" role="tabpanel">
-                    @include('sops.partials.gallery')
+                    @include('sops.index.gallery')
                 </div>
 
                 {{-- TAB 7: CATATAN SUHU RUANGAN --}}
                 <div class="tab-pane fade" id="catatan-suhu-content" role="tabpanel">
-                    @include('sops.partials.catatan-suhu')
+                    @include('sops.index.catatan-suhu')
                 </div>
 
                 {{-- TAB 8: PENGENDALIAN HAMA --}}
                 <div class="tab-pane fade" id="pengendalian-hama-content" role="tabpanel">
-                    @include('sops.partials.pengendalian-hama')
+                    @include('sops.index.pengendalian-hama')
                 </div>
             </div>
         </div>

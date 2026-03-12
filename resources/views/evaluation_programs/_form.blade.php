@@ -19,6 +19,8 @@
         <div class="row mb-3">
             <div class="col-md-6">
                 <label class="form-label">Judul Program <span class="text-danger">*</span></label>
+                
+                <input type="hidden" name="sop_id" value="{{ old('sop_id', request('sop_id') ?? $evaluationProgram->sop_id ?? '') }}">
                 <input type="text" name="title" class="form-control"
                        value="{{ old('title', $evaluationProgram->title ?? '') }}"
                        placeholder="e.g. Evaluasi Efektivitas Pelatihan K3"

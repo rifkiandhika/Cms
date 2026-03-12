@@ -8,6 +8,8 @@
     {{-- Tanggal --}}
     <div class="col-md-6">
         <label class="form-label fw-bold">Tanggal <span class="text-danger">*</span></label>
+        
+        <input type="hidden" name="sop_id" value="{{ old('sop_id', request('sop_id') ?? $catatan->sop_id ?? '') }}">
         <input type="date" name="tanggal" class="form-control form-control-sm"
                value="{{ old('tanggal', isset($catatan) ? $catatan->tanggal?->format('Y-m-d') : '') }}" required>
     </div>

@@ -16,6 +16,8 @@
         <label class="form-label fw-semibold">
             Judul <span class="text-danger">*</span>
         </label>
+        
+        <input type="hidden" name="sop_id" value="{{ old('sop_id', request('sop_id') ?? $gallery->sop_id ?? '') }}">
         <input type="text"
                name="judul"
                class="form-control"

@@ -8,22 +8,26 @@ use Illuminate\Database\Eloquent\Model;
 class Gudang extends Model
 {
     use HasUuids;
+
     protected $table = 'gudangs';
     protected $guarded = [];
 
-    public function supplier()
-    {
-        return $this->belongsTo(Supplier::class);
-    }
 
     public function details()
     {
         return $this->hasMany(DetailGudang::class);
     }
 
-    public function histories()
+    // ← TAMBAH: akses stock movements melalui gudang
+    public function stockMovements()
     {
-        return $this->hasMany(HistoryGudang::class, 'supplier_id', 'supplier_id');
+        return $this->hasMany(StockMovement::class, 'gudang_id');
     }
 
+    // ── Scopes ──────────────────────────────────────────
+
+    public function scopeAktif($query)
+    {
+        return $query->where('status', 'Aktif');
+    }
 }

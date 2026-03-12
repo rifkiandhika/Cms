@@ -147,6 +147,12 @@ Route::middleware(['auth', 'pin.verified'])->group(function () {
         Route::get('/preview-edit', [SopController::class, 'previewEdit']);
 
         Route::get('/preview', [SopPdfController::class, 'getPreview'])->name('get-preview');
+
+        Route::get('pages', [SopController::class, 'listPages'])
+            ->name('pages');
+
+        Route::get('page-preview', [SopController::class, 'pagePreview'])
+            ->name('page-preview');
         
         // Download PDF with font settings
         Route::get('/download-pdf', [SopPdfController::class, 'downloadPdf'])->name('download-pdf');
@@ -217,55 +223,96 @@ Route::middleware(['auth', 'pin.verified'])->group(function () {
     // GUDANG
     // ========================================
     Route::resource('gudangs', GudangController::class);
-    Route::get('/gudang/barang/{barangId}/detail', [GudangController::class, 'getDetailGudangByBarang']);
-    Route::post('/gudang/penerimaan', [GudangController::class, 'prosesPenerimaan'])->name('gudangs.penerimaan');
-    Route::get('/gudang/{id}/details/data', [GudangController::class, 'detailsData']);
-    Route::get('/supplier/{supplier}/details', [GudangController::class, 'getSupplierDetails']);
-    Route::get('/gudang/{gudangId}/history', [HistoryGudangController::class, 'index'])
-        ->name('gudang.history');
-    Route::post('/history-gudang/filter', [HistoryGudangController::class, 'filter'])
-        ->name('history-gudang.filter');
-    Route::get('/history-gudang/export-excel', [HistoryGudangController::class, 'exportExcel'])
-        ->name('history-gudang.export-excel');
-    Route::get('/history-gudang/export-pdf', [HistoryGudangController::class, 'exportPdf'])
-        ->name('history-gudang.export-pdf');
-    Route::get('/history-gudang/{id}', [HistoryGudangController::class, 'show'])
-        ->name('history-gudang.show');
-    Route::post('/history-gudang/summary', [HistoryGudangController::class, 'summary'])
-        ->name('history-gudang.summary');
-    Route::get('/stock', [GudangController::class, 'stockGudang'])->name('gudang.stock');
+
+    Route::post('/gudang/penerimaan', [GudangController::class, 'prosesPenerimaan'])
+        ->name('gudangs.penerimaan');
+
+    Route::get('/gudang/{id}/details/data', [GudangController::class, 'detailsData'])
+        ->name('gudangs.details.data');
+
+    Route::get('/stock', [GudangController::class, 'stockGudang'])
+        ->name('gudang.stock');
     // ========================================
     // PURCHASE ORDER
     // ========================================
+
+    // Route resource untuk Purchase Order dengan parameter custom 'id_po'
     Route::resource('po', PurchaseOrderController::class)->parameters([
         'po' => 'id_po'
     ]);
 
+    // Group untuk route PO dengan prefix 'po'
     Route::prefix('po')->name('po.')->group(function () {
-        Route::post('{id_po}/submit', [PurchaseOrderController::class, 'submit'])->name('submit');
-        Route::post('{id_po}/approve-kepala-gudang', [PurchaseOrderController::class, 'approveKepalaGudang'])->name('approve.kepala-gudang');
-        Route::post('{id_po}/approve-kasir', [PurchaseOrderController::class, 'approveKasir'])->name('approve.kasir');
-        Route::post('{id_po}/send-to-supplier', [PurchaseOrderController::class, 'sendToSupplier'])->name('send-to-supplier');
-        Route::get('{id_po}/print', [PurchaseOrderController::class, 'print'])->name('print');
-        Route::get('/po/{id_po}/print-invoice', [PurchaseOrderController::class, 'printInvoice'])->name('print-invoice');
+        
+        Route::post('{id_po}/submit', [PurchaseOrderController::class, 'submit'])
+            ->name('submit');
+        
+        // Approval Kepala Gudang
+        Route::post('{id_po}/approve-kepala-gudang', [PurchaseOrderController::class, 'approveKepalaGudang'])
+            ->name('approve.kepala-gudang');
+        
+        // Approval Kasir
+        Route::post('{id_po}/approve-kasir', [PurchaseOrderController::class, 'approveKasir'])
+            ->name('approve.kasir');
+        
+        // Kirim ke Supplier
+        Route::post('{id_po}/send-to-supplier', [PurchaseOrderController::class, 'sendToSupplier'])
+            ->name('send-to-supplier');
+        
+        // Tandai sebagai diterima (untuk PO Pembelian)
+        Route::post('{id_po}/mark-received', [PurchaseOrderController::class, 'markAsReceived'])
+            ->name('mark-received');
+        
+        Route::get('{id_po}/print', [PurchaseOrderController::class, 'print'])
+            ->name('print');
+        
+        // Print Invoice
+        Route::get('{id_po}/print-invoice', [PurchaseOrderController::class, 'printInvoice'])
+            ->name('print-invoice');
+        
         Route::get('{id_po}/confirm-receipt-internal', [PoConfirmationController::class, 'showConfirmation'])
-            ->name('show-confirmation');
-        Route::post('{id_po}/confirm-receipt-internal', [PoConfirmationController::class, 'confirmReceipt'])
             ->name('confirm-receipt');
+        
+        // Proses konfirmasi penerimaan untuk penjualan
+        Route::post('{id_po}/confirm-receipt-internal', [PoConfirmationController::class, 'confirmReceipt'])
+            ->name('confirm-receipt.store');
+        
         Route::get('{id_po}/confirm-receipt-external', [PoexConfirmationController::class, 'showConfirmation'])
             ->name('showex-confirmation');
+        
         Route::post('{id_po}/confirm-receipt-external', [PoexConfirmationController::class, 'confirmReceipt'])
             ->name('confirmex-receipt');
-        Route::get('/po/{id_po}/invoice-form', [PoexConfirmationController::class, 'showInvoiceForm'])
+
+        Route::get('{id_po}/invoice-form', [PoexConfirmationController::class, 'showInvoiceForm'])
             ->name('invoice-form');
-        Route::post('/po/{id_po}/store-invoice', [PoexConfirmationController::class, 'storeInvoice'])
+        
+        Route::post('{id_po}/store-invoice', [PoexConfirmationController::class, 'storeInvoice'])
             ->name('store-invoice');
-        Route::post('/po/{id_po}/mark-received', [PurchaseOrderController::class, 'markAsReceived'])
-        ->name('mark-received');
-        Route::post('/{id_po}/upload-proof', [PurchaseOrderController::class, 'uploadProof'])
+
+        Route::post('{id_po}/upload-proof', [PurchaseOrderController::class, 'uploadProof'])
             ->name('upload-proof');
-        Route::post('/po/{id_po}/delete-proof', [PurchaseOrderController::class, 'deleteProof'])
-            ->name('delete-invoice-proof');
+        
+        Route::post('{id_po}/delete-proof', [PurchaseOrderController::class, 'deleteProof'])
+            ->name('delete-proof');
+        
+        Route::post('{id_po}/customer-receive', [PurchaseOrderController::class, 'customerReceive'])
+            ->name('customer-receive');
+        
+        Route::get('{id_po}/receive-form', [PurchaseOrderController::class, 'showReceiveForm'])
+            ->name('receive-form');
+        
+        Route::get('pending', [PurchaseOrderController::class, 'pending'])
+            ->name('pending');
+        
+        Route::get('completed', [PurchaseOrderController::class, 'getCompleted'])
+            ->name('completed');
+        
+        Route::get('{id_po}/items', [PurchaseOrderController::class, 'getItems'])
+            ->name('items');
+        
+        Route::get('/po/get-harga-customer', [PurchaseOrderController::class, 'getHargaCustomer'])
+            ->name('get-harga-customer');
+        Route::post('/po/{id_po}/save-suhu', [PurchaseOrderController::class, 'saveSuhu'])->name('save-suhu');
     });
 
     // ========================================

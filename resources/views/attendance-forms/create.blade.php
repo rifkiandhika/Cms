@@ -50,6 +50,7 @@
                     <div class="row mb-3">
                         <label class="col-md-3 col-form-label fw-bold">Topik Pelatihan <span class="text-danger">*</span></label>
                         <div class="col-md-9">
+                            <input type="hidden" name="sop_id" value="{{ request('sop_id') }}">
                             <input type="text" name="topik_pelatihan" class="form-control"
                                    value="{{ old('topik_pelatihan') }}" required>
                         </div>

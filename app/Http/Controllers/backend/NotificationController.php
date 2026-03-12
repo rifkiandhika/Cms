@@ -126,7 +126,7 @@ class NotificationController extends Controller
         if ($user->hasAnyRole(['Superadmin', 'admin', 'kepala_gudang'])) {
             $pendingPayment = TagihanPO::whereIn('status', ['menunggu_pembayaran', 'dibayar_sebagian'])
                 ->with(['purchaseOrder:id_po,no_po,no_gr', 'supplier:id,nama_supplier'])
-                ->select('id_tagihan', 'no_tagihan', 'id_po', 'id_relasi', 'grand_total', 'sisa_tagihan', 'tanggal_jatuh_tempo', 'status')
+                ->select('id_tagihan', 'no_tagihan', 'id_po', 'id_relasi', 'grand_total', 'tanggal_jatuh_tempo', 'status')
                 ->orderBy('tanggal_jatuh_tempo', 'asc')
                 ->get()
                 ->map(function ($tagihan) {

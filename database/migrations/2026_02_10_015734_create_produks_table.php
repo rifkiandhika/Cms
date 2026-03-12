@@ -18,9 +18,6 @@ return new class extends Migration
             $table->string('nama_produk');
             $table->string('merk')->nullable();
             $table->string('jenis')->nullable();
-            $table->string('satuan')->nullable();
-            $table->decimal('harga_beli', 15, 2);
-            $table->decimal('harga_jual', 15, 2);
             $table->text('deskripsi')->nullable();
             $table->enum('status', ['aktif', 'nonaktif'])->default('aktif');
             $table->timestamps();

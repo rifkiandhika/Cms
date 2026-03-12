@@ -9,7 +9,10 @@ class EvaluationForm extends Model
 {
     use HasFactory;
 
+    protected $guarded = [];
+
     protected $fillable = [
+        'sop_id',
         'materi_pelatihan',
         'hari_tanggal',
         'tempat_pelatihan',

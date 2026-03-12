@@ -11,6 +11,7 @@ class AttendanceForm extends Model
 
     protected $table = 'attendance_forms';
     protected $fillable = [
+        'sop_id',
         'topik_pelatihan',
         'tanggal',
         'tempat',

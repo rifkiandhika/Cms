@@ -6,7 +6,7 @@
         </h4>
         <p class="text-muted mb-0">Kelola form kehadiran peserta pelatihan</p>
     </div>
-    <a href="{{ route('attendance-forms.create') }}" class="btn btn-success">
+    <a href="{{ route('attendance-forms.create', ['sop_id' => $sop->id]) }}" class="btn btn-success">
         <i class="ri-add-circle-line me-1"></i>Tambah Daftar Hadir
     </a>
 </div>
@@ -154,7 +154,7 @@
                                         </a>
                                     </li>
                                     <li>
-                                        <a class="dropdown-item" href="{{ route('attendance-forms.edit', $form->id) }}">
+                                        <a class="dropdown-item" href="{{ route('attendance-forms.edit', [$form->id, 'sop_id' => $form->sop_id]) }}">
                                             <i class="ri-edit-line me-2"></i>Edit
                                         </a>
                                     </li>

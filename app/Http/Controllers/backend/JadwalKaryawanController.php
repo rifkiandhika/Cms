@@ -70,7 +70,10 @@ class JadwalKaryawanController extends Controller
      */
     public function store(Request $request)
     {
+        // dd($request->sop_id, $request->all());
+        // dd($request->all());
         $validated = $request->validate([
+            'sop_id'      => 'nullable|exists:sops,id',
             'tanggal' => 'required|date',
             'nama_acara' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',
@@ -91,6 +94,7 @@ class JadwalKaryawanController extends Controller
 
             // Create jadwal
             $jadwal = JadwalKaryawan::create([
+                'sop_id' => $validated['sop_id'] ?? null,
                 'tanggal' => $validated['tanggal'],
                 'nama_acara' => $validated['nama_acara'],
                 'deskripsi' => $validated['deskripsi'] ?? null,
@@ -151,6 +155,7 @@ class JadwalKaryawanController extends Controller
     public function update(Request $request, $id)
     {
         $validated = $request->validate([
+            'sop_id'      => 'nullable|exists:sops,id',
             'tanggal' => 'required|date',
             'nama_acara' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',
@@ -175,6 +180,7 @@ class JadwalKaryawanController extends Controller
 
             // Update jadwal
             $jadwal->update([
+                'sop_id' => $validated['sop_id'] ?? null,
                 'tanggal' => $validated['tanggal'],
                 'nama_acara' => $validated['nama_acara'],
                 'deskripsi' => $validated['deskripsi'] ?? null,

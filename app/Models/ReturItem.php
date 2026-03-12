@@ -16,26 +16,37 @@ class ReturItem extends Model
     protected $primaryKey = 'id_retur_item';
     public $incrementing = false;
     protected $keyType = 'string';
-
     protected $guarded = [];
 
     protected $casts = [
-        'qty_diretur' => 'integer',
-        'qty_diterima_kembali' => 'integer',
-        'harga_satuan' => 'decimal:2',
-        'subtotal_retur' => 'decimal:2',
+        'qty_diretur'                      => 'integer',
+        'qty_diterima_kembali'             => 'integer',
+        'konversi_snapshot'                => 'integer',
+        // ← TAMBAH: kolom baru dari perbaikan schema
+        'qty_diretur_satuan_dasar'         => 'integer',
+        'qty_diterima_kembali_satuan_dasar'=> 'integer',
+        'tanggal_kadaluarsa'               => 'date',
+        'harga_satuan'                     => 'decimal:2',
+        'subtotal_retur'                   => 'decimal:2',
     ];
 
     protected static function boot()
     {
         parent::boot();
 
-        // Auto calculate subtotal saat creating/updating
         static::saving(function ($model) {
+            // Hitung subtotal berdasarkan qty satuan (bukan satuan dasar)
             $model->subtotal_retur = $model->qty_diretur * $model->harga_satuan;
+
+            // ← TAMBAH: auto-hitung qty satuan dasar saat save
+            if ($model->konversi_snapshot) {
+                $model->qty_diretur_satuan_dasar =
+                    $model->qty_diretur * $model->konversi_snapshot;
+                $model->qty_diterima_kembali_satuan_dasar =
+                    $model->qty_diterima_kembali * $model->konversi_snapshot;
+            }
         });
 
-        // Update total retur setelah saved/deleted
         static::saved(function ($model) {
             $model->retur->updateTotal();
         });
@@ -45,57 +56,45 @@ class ReturItem extends Model
         });
     }
 
-    /**
-     * Relasi ke retur
-     */
     public function retur(): BelongsTo
     {
         return $this->belongsTo(Retur::class, 'id_retur', 'id_retur');
     }
 
-    /**
-     * Relasi ke produk
-     */
+    // ← PERBAIKAN: dulu FK ke DetailobatRs (tidak ada di schema)
+    // Seharusnya FK ke Produk
     public function produk(): BelongsTo
     {
-        return $this->belongsTo(DetailobatRs::class, 'id_produk', 'id_detail_obat_rs');
+        return $this->belongsTo(Produk::class, 'id_produk', 'id');
     }
 
-    /**
-     * Relasi ke purchase order item (jika dari PO)
-     */
+    // ← TAMBAH: relasi ke satuan yang dipakai saat retur
+    public function produkSatuan(): BelongsTo
+    {
+        return $this->belongsTo(ProdukSatuan::class, 'produk_satuan_id');
+    }
+
     public function purchaseOrderItem(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrderItem::class, 'id_item_sumber', 'id_po_item');
     }
 
-    /**
-     * Relasi ke detail stock apotik (jika dari Stock Apotik)
-     */
-    public function detailStockApotik(): BelongsTo
-    {
-        return $this->belongsTo(DetailStockApotik::class, 'id_item_sumber', 'id');
-    }
-
-    /**
-     * Relasi ke retur item batches
-     */
     public function batches(): HasMany
     {
         return $this->hasMany(ReturItemBatch::class, 'id_retur_item', 'id_retur_item');
     }
 
-    /**
-     * Get sisa quantity yang belum diterima kembali
-     */
     public function getSisaQtyAttribute(): int
     {
         return $this->qty_diretur - $this->qty_diterima_kembali;
     }
 
-    /**
-     * Check apakah item sudah lengkap diterima
-     */
+    // ← TAMBAH: sisa dalam satuan dasar (PCS)
+    public function getSisaQtySatuanDasarAttribute(): int
+    {
+        return $this->qty_diretur_satuan_dasar - $this->qty_diterima_kembali_satuan_dasar;
+    }
+
     public function isComplete(): bool
     {
         return $this->qty_diterima_kembali >= $this->qty_diretur;

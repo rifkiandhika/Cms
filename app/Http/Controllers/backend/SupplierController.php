@@ -3,18 +3,13 @@
 namespace App\Http\Controllers\backend;
 
 use App\Http\Controllers\Controller;
-use App\Models\Alkes;
-use App\Models\Department;
-use App\Models\DetailobatRs;
 use App\Models\DetailSupplier;
 use App\Models\Jenis;
 use App\Models\Produk;
-use App\Models\Reagen;
 use App\Models\Satuan;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
-use Illuminate\Validation\Rule;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class SupplierController extends Controller
@@ -27,10 +22,10 @@ class SupplierController extends Controller
 
     public function create()
     {
-        $jenis = Jenis::where('status', 'Aktif')->orderBy('nama_jenis')->get();
+        $jenis   = Jenis::where('status', 'Aktif')->orderBy('nama_jenis')->get();
         $satuans = Satuan::where('status', 'Aktif')->orderBy('nama_satuan')->get();
 
-        // Buat instance kosong agar blade tidak error saat mengakses $supplier->detailSuppliers
+        // Instance kosong agar blade tidak error saat akses $supplier->detailSuppliers
         $supplier = new Supplier();
 
         return view('supplier.create', compact('jenis', 'satuans', 'supplier'));
@@ -39,6 +34,7 @@ class SupplierController extends Controller
     public function store(Request $request)
     {
         $request->validate([
+            // Data utama supplier
             'nama_supplier'     => 'required|string|max:100',
             'npwp'              => 'nullable|string|max:20|unique:suppliers,npwp',
             'izin_operasional'  => 'nullable|string|max:100',
@@ -53,40 +49,43 @@ class SupplierController extends Controller
             'file'              => 'nullable|mimes:pdf|max:2048',
             'file2'             => 'nullable|mimes:pdf|max:2048',
 
-            // Detail barang
-            'jenis'             => 'required|array',
-            'jenis.*'           => 'required|string',
-            'product_id'        => 'nullable|array',
-            'product_id.*'      => 'nullable|uuid',
-            'nama_manual'       => 'nullable|array',
-            'nama_manual.*'     => 'nullable|string|max:200',
-            'no_batch'          => 'nullable|array',
-            'no_batch.*'        => 'nullable|string',
-            'judul'             => 'nullable|array',
-            'judul.*'           => 'nullable|string',
-            'merk'              => 'nullable|array',
-            'merk.*'            => 'nullable|string',
-            'satuan'            => 'required|array',
-            'satuan.*'          => 'required|string',
-            'harga_beli'        => 'nullable|array',
-            'harga_beli.*'      => 'nullable|numeric|min:0',
-            'stock_live'        => 'nullable|array',
-            'stock_live.*'      => 'nullable|integer|min:0',
-            'stock_po'          => 'nullable|array',
-            'stock_po.*'        => 'nullable|integer|min:0',
-            'min_persediaan'    => 'nullable|array',
-            'min_persediaan.*'  => 'nullable|integer|min:0',
-            'exp_date'          => 'nullable|array',
-            'exp_date.*'        => 'nullable|date',
-            'kode_rak'          => 'nullable|array',
-            'kode_rak.*'        => 'nullable|string',
+            // Detail barang — sesuai kolom schema detail_suppliers
+            'jenis'                 => 'nullable|array',
+            'jenis.*'               => 'nullable|string',
+            'produk_id'             => 'nullable|array',
+            'produk_id.*'           => 'nullable|uuid',
+            'produk_satuan_id'      => 'nullable|array',
+            'produk_satuan_id.*'    => 'nullable|uuid',
+            'isi'                   => 'nullable|array',
+            'isi.*'                 => 'nullable|integer|min:1',
+            'harga_beli'            => 'nullable|array',
+            'harga_beli.*'          => 'nullable|numeric|min:0',
+            'catatan'               => 'nullable|array',
+            'catatan.*'             => 'nullable|string',
+            // Field tambahan yang ditampilkan di UI (tidak disimpan ke detail_suppliers)
+            'no_batch'              => 'nullable|array',
+            'no_batch.*'            => 'nullable|string',
+            'judul'                 => 'nullable|array',
+            'judul.*'               => 'nullable|string',
+            'nama_manual'           => 'nullable|array',
+            'nama_manual.*'         => 'nullable|string|max:200',
+            'merk'                  => 'nullable|array',
+            'merk.*'                => 'nullable|string',
+            'exp_date'              => 'nullable|array',
+            'exp_date.*'            => 'nullable|date',
+            'stock_live'            => 'nullable|array',
+            'stock_live.*'          => 'nullable|integer|min:0',
+            'stock_po'              => 'nullable|array',
+            'stock_po.*'            => 'nullable|integer|min:0',
+            'min_persediaan'        => 'nullable|array',
+            'min_persediaan.*'      => 'nullable|integer|min:0',
+            'kode_rak'              => 'nullable|array',
+            'kode_rak.*'            => 'nullable|string',
         ]);
 
-        // Handle upload file
         $filePath  = $this->uploadFile($request, 'file');
         $file2Path = $this->uploadFile($request, 'file2', '_2_');
 
-        // Simpan supplier
         $supplier = Supplier::create([
             'nama_supplier'    => $request->nama_supplier,
             'npwp'             => $request->npwp,
@@ -111,7 +110,11 @@ class SupplierController extends Controller
 
     public function edit(Supplier $supplier)
     {
-        $supplier->load(['detailSuppliers.produk']);
+        // Load relasi produk dan produkSatuan untuk ditampilkan di blade
+        $supplier->load([
+            'detailSuppliers.produk.produkSatuans',
+            'detailSuppliers.produkSatuan',
+        ]);
 
         $jenis   = Jenis::where('status', 'Aktif')->orderBy('nama_jenis')->get();
         $satuans = Satuan::where('status', 'Aktif')->orderBy('nama_satuan')->get();
@@ -136,22 +139,23 @@ class SupplierController extends Controller
             'file'              => 'nullable|mimes:pdf|max:2048',
             'file2'             => 'nullable|mimes:pdf|max:2048',
 
-            // Detail barang
-            'jenis'             => 'required|array',
-            'jenis.*'           => 'required|string',
-            'product_id'        => 'nullable|array',
-            'product_id.*'      => 'nullable|uuid',
-            'nama_manual'       => 'nullable|array',
-            'nama_manual.*'     => 'nullable|string|max:200',
-            'satuan'            => 'required|array',
-            'satuan.*'          => 'required|string',
+            'jenis'                 => 'nullable|array',
+            'jenis.*'               => 'nullable|string',
+            'produk_id'             => 'nullable|array',
+            'produk_id.*'           => 'nullable|uuid',
+            'produk_satuan_id'      => 'nullable|array',
+            'produk_satuan_id.*'    => 'nullable|uuid',
+            'isi'                   => 'nullable|array',
+            'isi.*'                 => 'nullable|integer|min:1',
+            'harga_beli'            => 'nullable|array',
+            'harga_beli.*'          => 'nullable|numeric|min:0',
+            'catatan'               => 'nullable|array',
+            'catatan.*'             => 'nullable|string',
         ]);
 
-        // Handle file upload (pertahankan file lama jika tidak ada upload baru)
         $filePath  = $this->uploadFile($request, 'file', '_', $supplier->file);
         $file2Path = $this->uploadFile($request, 'file2', '_2_', $supplier->file2);
 
-        // Update data utama
         $supplier->update([
             'nama_supplier'    => $request->nama_supplier,
             'npwp'             => $request->npwp,
@@ -168,7 +172,7 @@ class SupplierController extends Controller
             'file2'            => $file2Path,
         ]);
 
-        // Hapus detail lama, simpan yang baru
+        // Hapus detail lama, simpan ulang
         $supplier->detailSuppliers()->delete();
         $this->saveDetails($supplier, $request);
 
@@ -198,7 +202,7 @@ class SupplierController extends Controller
 
     /**
      * Upload file PDF dan kembalikan path-nya.
-     * Jika tidak ada file baru yang diupload, kembalikan $existingPath.
+     * Jika tidak ada file baru, kembalikan $existingPath.
      */
     private function uploadFile(Request $request, string $field, string $suffix = '_', ?string $existingPath = null): ?string
     {
@@ -206,7 +210,6 @@ class SupplierController extends Controller
             return $existingPath;
         }
 
-        // Hapus file lama jika ada
         if ($existingPath && File::exists(public_path($existingPath))) {
             File::delete(public_path($existingPath));
         }
@@ -224,54 +227,47 @@ class SupplierController extends Controller
     }
 
     /**
-     * Simpan detail barang supplier dari request.
+     * Simpan detail barang supplier.
+     * Hanya kolom yang ada di schema detail_suppliers yang disimpan:
+     *   supplier_id, produk_id, produk_satuan_id, harga_beli, is_aktif, catatan
+     *
+     * Constraint unique: (supplier_id, produk_id, produk_satuan_id)
+     * → baris dengan kombinasi duplikat di-skip (updateOrCreate dipakai).
      */
     private function saveDetails(Supplier $supplier, Request $request): void
     {
-        if (!$request->has('jenis') || !is_array($request->jenis)) {
+        $produkIds = $request->input('produk_id', []);
+
+        if (empty($produkIds)) {
             return;
         }
 
-        foreach ($request->jenis as $i => $jenis) {
-            $productId  = $request->product_id[$i] ?? null;
-            $namaBarang = null;
-            $merk       = $request->merk[$i] ?? null;
-            $satuan     = $request->satuan[$i] ?? null;
-            $hargaBeli  = $request->harga_beli[$i] ?? 0;
-
-            if ($productId) {
-                $produk = Produk::find($productId);
-                if ($produk) {
-                    $namaBarang = $produk->nama_produk;
-                    $merk       = $merk    ?: $produk->merk;
-                    $satuan     = $satuan  ?: $produk->satuan;
-                    $hargaBeli  = $hargaBeli ?: $produk->harga_beli;
-                }
-            } else {
-                $namaBarang = $request->nama_manual[$i] ?? null;
-                $productId  = null;
-            }
-
-            // Skip baris yang tidak ada nama produknya
-            if (!$namaBarang) {
+        foreach ($produkIds as $i => $produkId) {
+            // Hanya proses baris yang memiliki produk_id (baris wajib punya produk)
+            if (empty($produkId)) {
                 continue;
             }
 
-            $supplier->detailSuppliers()->create([
-                'product_id'     => $productId,
-                'no_batch'       => $request->no_batch[$i] ?? null,
-                'judul'          => $request->judul[$i] ?? '-',
-                'nama'           => $namaBarang,
-                'jenis'          => $jenis,
-                'merk'           => $merk,
-                'satuan'         => $satuan,
-                'exp_date'       => $request->exp_date[$i] ?? null,
-                'stock_live'     => $request->stock_live[$i] ?? 0,
-                'stock_po'       => $request->stock_po[$i] ?? 0,
-                'min_persediaan' => $request->min_persediaan[$i] ?? 0,
-                'harga_beli'     => str_replace('.', '', $hargaBeli),
-                'kode_rak'       => $request->kode_rak[$i] ?? null,
-            ]);
+            $produkSatuanId = $request->input("produk_satuan_id.{$i}") ?: null;
+            $hargaBeli      = $request->input("harga_beli.{$i}", 0);
+            $catatan        = $request->input("catatan.{$i}") ?: null;
+
+            // Bersihkan format rupiah (titik ribuan)
+            $hargaBeli = str_replace('.', '', $hargaBeli);
+
+            // updateOrCreate untuk menghindari duplicate unique constraint
+            // (supplier_id, produk_id, produk_satuan_id)
+            $supplier->detailSuppliers()->updateOrCreate(
+                [
+                    'produk_id'        => $produkId,
+                    'produk_satuan_id' => $produkSatuanId,
+                ],
+                [
+                    'harga_beli' => is_numeric($hargaBeli) ? $hargaBeli : 0,
+                    'is_aktif'   => true,
+                    'catatan'    => $catatan,
+                ]
+            );
         }
     }
 }

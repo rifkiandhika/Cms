@@ -4,23 +4,20 @@ namespace App\Http\Controllers\backend;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\DetailCustomer;
 use App\Models\DetailGudang;
-use App\Models\DetailobatRs;
-use App\Models\DetailstockApotik;
 use App\Models\DetailSupplier;
 use App\Models\Gudang;
 use App\Models\Karyawan;
-use App\Models\ObatRs;
 use App\Models\PoAuditTrail;
 use App\Models\PoProof;
 use App\Models\Produk;
 use App\Models\ProdukSatuan;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
-use App\Models\ShippingActivity;
-use App\Models\StockApotik;
 use App\Models\Supplier;
 use App\Models\TagihanPoItem;
+use App\Models\StockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -28,6 +25,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Services\TagihanPoServices;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 
 class PurchaseOrderController extends Controller
@@ -79,80 +77,135 @@ class PurchaseOrderController extends Controller
 
     public function create(Request $request)
     {
-        $type = $request->get('type', 'pembelian'); // penjualan atau pembelian
+        $type      = $request->get('type', 'pembelian');
         $suppliers = Supplier::where('status', 'Aktif')->get();
         $customers = Customer::where('status', 'aktif')->get();
 
         if ($type === 'penjualan') {
-            $gudang = Gudang::first();
-            if (!$gudang) {
-                return back()->with('error', 'Gudang tidak ditemukan');
-            }
+    // Ambil SEMUA gudang, bukan hanya Gudang::first()
+    // karena BTC-003 mungkin tersimpan di gudang_id yang berbeda
+    $gudangIds = Gudang::pluck('id');
+    
+    if ($gudangIds->isEmpty()) {
+        return back()->with('error', 'Gudang tidak ditemukan');
+    }
 
-            // ✅ Tambahkan with('produk.produkSatuans.satuan') agar satuans ikut ter-load
-            $detailGudangs = DetailGudang::with(['produk.produkSatuans.satuan'])
-                ->where('gudang_id', $gudang->id)
-                ->where('stock_gudang', '>', 0)
-                ->whereNotNull('barang_id')
-                ->get();
+    $detailGudangs = DetailGudang::with([
+        'produk.produkSatuans.satuan',
+        'supplier',
+    ])
+    ->whereIn('gudang_id', $gudangIds)      // ← pakai whereIn bukan where
+    ->whereRaw('CAST(stock_gudang AS SIGNED) > 0')  // ← cast eksplisit atasi bug tipe data
+    ->orderBy('produk_id')
+    ->orderBy('supplier_id')
+    ->get();
 
-            $produkList = [];
+    \Log::info('DetailGudang debug', [
+        'gudang_ids'  => $gudangIds->toArray(),
+        'total_rows'  => $detailGudangs->count(),
+        'batches'     => $detailGudangs->map(fn($d) => [
+            'id'          => $d->id,
+            'no_batch'    => $d->no_batch,
+            'supplier_id' => $d->supplier_id,
+            'supplier'    => $d->supplier?->nama_supplier ?? 'NULL - cek FK!',
+            'stock'       => $d->stock_gudang,
+            'gudang_id'   => $d->gudang_id,
+        ])->toArray(),
+    ]);
 
-            foreach ($detailGudangs as $detail) {
-                if (!$detail->produk) continue;
+    $produkList = $detailGudangs
+        ->filter(fn($d) => $d->produk !== null)
+        ->map(function ($detail) {
+            $produk = $detail->produk;
 
-                $produk = $detail->produk;
+            $satuans = $produk->produkSatuans
+                ->map(fn($ps) => [
+                    'id'         => $ps->id,
+                    'label'      => $ps->satuan->nama_satuan ?? 'PCS',
+                    'konversi'   => (int) $ps->konversi,
+                    'isi'        => (float) $ps->isi,
+                    'is_default' => (bool) $ps->is_default,
+                ])
+                ->values()
+                ->toArray();
 
-                // ✅ Ambil semua satuan jual produk ini beserta harga finalnya
-                $satuans = $produk->produkSatuans->map(function ($ps) use ($produk) {
-                    return [
-                        'id'         => $ps->id,
-                        'label'      => $ps->label,
-                        'isi'        => (float) $ps->isi,
-                        'harga_jual' => $ps->harga_jual_final,  // pakai accessor dari model
-                        'is_default' => (bool) $ps->is_default,
-                    ];
-                })->values()->toArray();
+            return [
+                'id'                 => $detail->id,
+                'detail_gudang_id'   => $detail->id,
+                'produk_id'          => $produk->id,
+                'nama'               => $produk->nama_produk,
+                'merk'               => $produk->merk ?? '',
+                'stock_gudang'       => (int) $detail->stock_gudang,
+                'no_batch'           => $detail->no_batch ?? '-',
+                'tanggal_kadaluarsa' => $detail->tanggal_kadaluarsa
+                    ? Carbon::parse($detail->tanggal_kadaluarsa)->format('d/m/Y')
+                    : '-',
+                'satuans'            => $satuans,
+                'supplier_id'        => $detail->supplier_id,
+                // Fallback berlapis jika relasi gagal load
+                'supplier_name'      => $detail->supplier?->nama_supplier
+                                        ?? $detail->supplier_id
+                                        ?? '-',
+            ];
+        })
+        ->values()
+        ->toArray();
 
-                $produkList[] = [
-                    'id'               => $produk->id,
-                    'detail_gudang_id' => $detail->id,
-                    'nama'             => $produk->nama_produk,
-                    'merk'             => $produk->merk ?? '',
-                    // Jika tidak ada satuan jual terdefinisi, fallback ke harga_jual lama
-                    'harga_jual'       => $produk->harga_jual ?? 0,
-                    'stock_gudang'     => $detail->stock_gudang,
-                    'no_batch'         => $detail->no_batch ?? '-',
-                    'tanggal_kadaluarsa' => $detail->tanggal_kadaluarsa
-                        ? \Carbon\Carbon::parse($detail->tanggal_kadaluarsa)->format('d/m/Y')
-                        : '-',
-                    // ✅ INI YANG BARU: array satuan jual
-                    'satuans'          => $satuans,
-                ];
-            }
         } else {
-            // ✅ PO PEMBELIAN: Beli dari Supplier - AMBIL DARI DETAIL_SUPPLIER
-            $detailSuppliers = DetailSupplier::with(['supplier', 'produk'])
-                ->whereNotNull('product_id')
-                ->get();
+            // ──────────────────────────────────────────────────────────────
+            // PO PEMBELIAN
+            // Ambil dari detail_suppliers — SEMUA supplier aktif (filter di JS
+            // berdasarkan supplier yang dipilih di form)
+            // ──────────────────────────────────────────────────────────────
+            $detailSuppliers = DetailSupplier::with([
+                'supplier',
+                // DetailSupplier.produk() pakai FK 'product_id'
+                'produk.produkSatuans.satuan',
+                // produkSatuan = satuan SPESIFIK yang dijual oleh supplier ini
+                'produkSatuan.satuan',
+            ])
+            ->where('is_aktif', true)
+            ->get();
 
-            $produkList = $detailSuppliers->map(function ($detail) {
-                if (!$detail->produk) return null;
+            $produkList = $detailSuppliers
+                ->filter(fn($d) => $d->produk !== null)
+                ->map(function ($detail) {
+                    $produk      = $detail->produk;
+                    $produkSat   = $detail->produkSatuan;   // ProdukSatuan spesifik supplier
+                    $satuan      = $produkSat?->satuan;
 
-                $produk = $detail->produk;
+                    // Konversi: gunakan kolom 'konversi' (integer) dari ProdukSatuan
+                    // Fallback ke 'isi' jika konversi belum diset
+                    $konversi = $produkSat
+                        ? (int) ($produkSat->konversi ?: (int) ceil($produkSat->isi) ?: 1)
+                        : 1;
 
-                return [
-                    'id' => $produk->id,
-                    'detail_supplier_id' => $detail->id,
-                    'supplier_id' => $detail->supplier_id,
-                    'nama' => $produk->nama_produk,
-                    'jenis' => $detail->jenis ?? 'lainnya', // ✅ Ambil jenis dari detail_supplier
-                    'merk' => $produk->merk ?? '',
-                    'satuan' => $produk->satuan ?? 'pcs',
-                    'harga_beli' => $detail->harga_beli ?? 0, // ✅ Ambil harga dari detail_supplier
-                    'supplier_name' => $detail->supplier->nama_supplier ?? '-',
-                ];
-            })->filter()->values();
+                    $namaSatuan = $satuan?->nama_satuan ?? 'PCS';
+
+                    // Harga beli: ambil dari detail_suppliers.harga_beli (per-supplier)
+                    // bukan dari ProdukSatuan.harga_beli (global)
+                    $hargaBeli = (float) ($detail->harga_beli ?? 0);
+
+                    return [
+                        'id'                 => $produk->id,
+                        'detail_supplier_id' => $detail->id,
+                        'supplier_id'        => $detail->supplier_id,
+                        'nama'               => $produk->nama_produk,
+                        'merk'               => $produk->merk ?? '',
+                        // Satuan untuk dropdown (e.g. "Box")
+                        'satuan'             => $namaSatuan,
+                        // ID ProdukSatuan untuk disimpan ke purchase_order_items
+                        'produk_satuan_id'   => $produkSat?->id,
+                        // Konversi yang benar: 1 Box = 50 PCS
+                        'konversi'           => $konversi,
+                        // Harga beli dari detail_suppliers (harga negosiasi dengan supplier)
+                        'harga_beli'         => $hargaBeli,
+                        'supplier_name'      => $detail->supplier?->nama_supplier ?? '-',
+                    ];
+                })
+                ->filter()
+                ->values()
+                ->toArray();
         }
 
         return view('po.create', compact('type', 'suppliers', 'customers', 'produkList'));
@@ -161,158 +214,199 @@ class PurchaseOrderController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'tipe_po'                    => 'required|in:penjualan,pembelian',
-            'id_unit_pemohon'            => 'required',
-            'unit_pemohon'               => 'required|string',
-            'catatan_pemohon'            => 'nullable|string',
-            'id_supplier'                => 'required_if:tipe_po,pembelian|nullable|uuid',
-            'id_customer'                => 'required_if:tipe_po,penjualan|nullable|uuid',
-            'pajak'                      => 'nullable|numeric',
-            'pajak_persen'               => 'nullable|numeric',
-            'items'                      => 'required|array|min:1',
-            'items.*.id_produk'          => 'required|uuid',
-            'items.*.id_produk_satuan'   => 'nullable|uuid',
-            'items.*.qty_diminta'        => 'required|integer|min:1',
-            'items.*.jenis'              => 'nullable|string',
-            'items.*.harga'              => 'nullable|numeric',
+            'tipe_po'                          => 'required|in:penjualan,pembelian',
+            'id_unit_pemohon'                  => 'required',
+            'unit_pemohon'                     => 'required|string',
+            'catatan_pemohon'                  => 'nullable|string',
+            'id_supplier'                      => 'required_if:tipe_po,pembelian|nullable|uuid',
+            'id_customer'                      => 'required_if:tipe_po,penjualan|nullable|uuid',
+            'pajak'                            => 'nullable|numeric',
+            'pajak_persen'                     => 'nullable|numeric',
+            'items'                            => 'required|array|min:1',
+            'items.*.id_produk'                => 'required|uuid',
+            'items.*.produk_satuan_id'         => 'nullable|uuid',
+            'items.*.qty_diminta'              => 'required|integer|min:1',
+            'items.*.harga'                    => 'nullable|numeric',
+            // ── Kolom diskon (baru) ──────────────────────────────
+            'items.*.diskon_persen'            => 'nullable|numeric|min:0|max:100',
+            'items.*.diskon_nominal'           => 'nullable|numeric|min:0',
+            'items.*.is_free'                  => 'nullable|boolean',
+            // ────────────────────────────────────────────────────
+            'items.*.detail_gudang_id'         => 'nullable|uuid',
+            'items.*.no_batch'                 => 'nullable|string',
+            'items.*.tanggal_kadaluarsa'       => 'nullable|date',
         ]);
 
         DB::beginTransaction();
         try {
-            $items = $request->items;
-            $total = 0;
+            $itemsInput  = array_values($request->items);
+            $total       = 0;
+            $itemsToSave = [];
 
-            /** ===============================
-             * HITUNG TOTAL
-             * =============================== */
-            foreach ($items as $item) {
+            foreach ($itemsInput as $item) {
                 $produk = Produk::find($item['id_produk']);
-
                 if (!$produk) {
                     throw new \Exception('Produk tidak ditemukan: ' . $item['id_produk']);
                 }
 
-                $harga = 0;
+                $harga             = 0;
+                $konversiSnapshot  = 1;
+                $detailGudangId    = null;
+                $batchNumber       = null;
+                $tanggalKadaluarsa = null;
+
+                // Ambil konversi dari ProdukSatuan yang dipilih
+                if (!empty($item['produk_satuan_id'])) {
+                    $produkSatuan = ProdukSatuan::find($item['produk_satuan_id']);
+                    if ($produkSatuan) {
+                        $konversiSnapshot = (int) ($produkSatuan->konversi
+                            ?: (int) ceil($produkSatuan->isi)
+                            ?: 1);
+                    }
+                }
 
                 if ($request->tipe_po === 'penjualan') {
-                    // Ambil harga dari satuan yang dipilih
-                    if (!empty($item['id_produk_satuan'])) {
-                        $produkSatuan = ProdukSatuan::find($item['id_produk_satuan']);
-                        $harga = $produkSatuan
-                            ? $produkSatuan->harga_jual_final
-                            : ($produk->harga_jual ?? 0);
-                    } else {
-                        $harga = $produk->harga_jual ?? 0;
+                    // ── Harga dari detail_customers ────────────────────────
+                    $detailCustomer = DetailCustomer::where('produk_id', $item['id_produk'])
+                        ->where('customer_id', $request->id_customer)
+                        ->when(
+                            !empty($item['produk_satuan_id']),
+                            fn($q) => $q->where('produk_satuan_id', $item['produk_satuan_id'])
+                        )
+                        ->first();
+
+                    if (!$detailCustomer) {
+                        throw new \Exception(
+                            'Harga jual produk "' . $produk->nama_produk . '" untuk customer ini tidak ditemukan. ' .
+                            'Pastikan harga sudah diisi di Detail Customer.'
+                        );
                     }
+                    $harga = (float) ($detailCustomer->harga_jual ?? 0);
+
+                    // ── Ambil DetailGudang ─────────────────────────────────
+                    $detailGudang = null;
+                    if (!empty($item['detail_gudang_id'])) {
+                        $detailGudang = DetailGudang::find($item['detail_gudang_id']);
+                    }
+                    if (!$detailGudang) {
+                        $gudang = Gudang::first();
+                        if ($gudang) {
+                            $detailGudang = DetailGudang::where('produk_id', $item['id_produk'])
+                                ->where('gudang_id', $gudang->getKey())
+                                ->where('stock_gudang', '>', 0)
+                                ->orderBy('tanggal_kadaluarsa', 'asc')
+                                ->first();
+                        }
+                    }
+                    if ($detailGudang) {
+                        $detailGudangId    = $detailGudang->id;
+                        $batchNumber       = $detailGudang->no_batch;
+                        $tanggalKadaluarsa = $detailGudang->tanggal_kadaluarsa;
+                    }
+
                 } else {
-                    // Pembelian: ambil dari detail_supplier
-                    $detailSupplier = DetailSupplier::where('product_id', $item['id_produk'])
+                    // ── Harga dari detail_suppliers ────────────────────────
+                    $detailSupplier = DetailSupplier::where('produk_id', $item['id_produk'])
                         ->where('supplier_id', $request->id_supplier)
+                        ->when(
+                            !empty($item['produk_satuan_id']),
+                            fn($q) => $q->where('produk_satuan_id', $item['produk_satuan_id'])
+                        )
                         ->first();
 
                     if (!$detailSupplier) {
-                        throw new \Exception('Detail supplier tidak ditemukan untuk produk: ' . $produk->nama_produk);
+                        throw new \Exception(
+                            'Harga beli produk "' . $produk->nama_produk . '" untuk supplier ini tidak ditemukan. ' .
+                            'Pastikan Detail Supplier sudah diisi.'
+                        );
                     }
-
-                    $harga = $detailSupplier->harga_beli ?? 0;
+                    $harga = (float) ($detailSupplier->harga_beli ?? 0);
                 }
 
-                $total += $harga * $item['qty_diminta'];
+                // ── Hitung diskon ──────────────────────────────────────────
+                $isFree        = !empty($item['is_free']) && (bool) $item['is_free'];
+                $diskonPersen  = $isFree ? 100 : (float) ($item['diskon_persen'] ?? 0);
+                $diskonNominal = $isFree ? $harga : (float) ($item['diskon_nominal'] ?? ($harga * $diskonPersen / 100));
+
+                // Pastikan nominal tidak melebihi harga
+                $diskonNominal     = min($diskonNominal, $harga);
+                $hargaSetelahDiskon = $harga - $diskonNominal;
+                // ──────────────────────────────────────────────────────────
+
+                $qtyDiminta            = (int) $item['qty_diminta'];
+                $qtyDimintaSatuanDasar = $qtyDiminta * $konversiSnapshot;
+                // Subtotal dihitung dari harga SETELAH diskon
+                $subtotal              = $hargaSetelahDiskon * $qtyDiminta;
+
+                $itemsToSave[] = [
+                    'produk'                   => $produk,
+                    'id_produk'                => $produk->id,
+                    'produk_satuan_id'         => $item['produk_satuan_id'] ?? null,
+                    'konversi_snapshot'        => $konversiSnapshot,
+                    'qty_diminta'              => $qtyDiminta,
+                    'qty_diminta_satuan_dasar' => $qtyDimintaSatuanDasar,
+                    'harga'                    => $harga,              // harga asli sebelum diskon
+                    'diskon_persen'            => $diskonPersen,
+                    'diskon_nominal'           => $diskonNominal,
+                    'harga_setelah_diskon'     => $hargaSetelahDiskon,
+                    'is_free'                  => $isFree,
+                    'subtotal'                 => $subtotal,           // subtotal sudah after diskon
+                    'detail_gudang_id'         => $detailGudangId,
+                    'batch_number'             => $batchNumber,
+                    'tanggal_kadaluarsa'       => $tanggalKadaluarsa,
+                ];
+
+                $total += $subtotal;
             }
 
-            $pajak      = $request->pajak ?? 0;
+            $pajak      = (float) ($request->pajak ?? 0);
             $grandTotal = $total + $pajak;
 
-            /** ===============================
-             * CREATE PO
-             * =============================== */
+            // Buat PO
             $po = PurchaseOrder::create([
-                'tipe_po'              => $request->tipe_po,
-                'status'               => 'draft',
-                'id_unit_pemohon'      => $request->id_unit_pemohon,
-                'unit_pemohon'         => $request->unit_pemohon,
-                'id_karyawan_pemohon'  => Auth::user()->id_karyawan,
-                'tanggal_permintaan'   => now(),
-                'catatan_pemohon'      => $request->catatan_pemohon,
-                'unit_tujuan'          => $request->tipe_po === 'penjualan' ? 'customer' : 'supplier',
-                'id_supplier'          => $request->tipe_po === 'pembelian'
+                'tipe_po'             => $request->tipe_po,
+                'status'              => 'draft',
+                'id_unit_pemohon'     => $request->id_unit_pemohon,
+                'unit_pemohon'        => $request->unit_pemohon,
+                'id_karyawan_pemohon' => Auth::user()->id_karyawan,
+                'tanggal_permintaan'  => now(),
+                'catatan_pemohon'     => $request->catatan_pemohon,
+                'unit_tujuan'         => $request->tipe_po === 'penjualan' ? 'customer' : 'supplier',
+                'id_supplier'         => $request->tipe_po === 'pembelian'
                                             ? $request->id_supplier
                                             : $request->id_customer,
-                'total_harga'          => $total,
-                'pajak'                => $pajak,
-                'grand_total'          => $grandTotal,
-                'tanggal_jatuh_tempo'  => now()->addDays(30),
+                'total_harga'         => $total,
+                'pajak'               => $pajak,
+                'grand_total'         => $grandTotal,
+                'tanggal_jatuh_tempo' => now()->addDays(30),
             ]);
 
-            /** ===============================
-             * CREATE PO ITEMS
-             * =============================== */
-            foreach ($items as $item) {
-                $produk = Produk::find($item['id_produk']);
-
-                if ($request->tipe_po === 'penjualan') {
-                    // ── PENJUALAN ──
-                    $hargaSatuan = 0;
-                    $satuanLabel = null;
-
-                    if (!empty($item['id_produk_satuan'])) {
-                        $produkSatuan = ProdukSatuan::find($item['id_produk_satuan']);
-                        if ($produkSatuan) {
-                            $hargaSatuan = $produkSatuan->harga_jual_final;
-                            $satuanLabel = $produkSatuan->label;
-                        }
-                    } else {
-                        $hargaSatuan = $produk->harga_jual ?? 0;
-                    }
-
-                    PurchaseOrderItem::create([
-                        'id_po'        => $po->id_po,
-                        'id_produk'    => $produk->id,
-                        'nama_produk'  => $produk->nama_produk,
-                        'qty_diminta'  => $item['qty_diminta'],
-                        'harga_satuan' => $hargaSatuan,
-                        'subtotal'     => $hargaSatuan * $item['qty_diminta'],
-                        'jenis'        => $satuanLabel,
-                    ]);
-
-                } else {
-                    // ── PEMBELIAN ──
-                    $hargaSatuan = 0;
-                    $jenis       = null;
-
-                    $detailSupplier = DetailSupplier::where('product_id', $item['id_produk'])
-                        ->where('supplier_id', $request->id_supplier)
-                        ->first();
-
-                    if ($detailSupplier) {
-                        $hargaSatuan = $detailSupplier->harga_beli ?? 0;
-                        $jenis       = $detailSupplier->jenis ?? 'lainnya';
-                    }
-
-                    PurchaseOrderItem::create([
-                        'id_po'        => $po->id_po,
-                        'id_produk'    => $produk->id,
-                        'nama_produk'  => $produk->nama_produk,
-                        'qty_diminta'  => $item['qty_diminta'],
-                        'harga_satuan' => $hargaSatuan,
-                        'subtotal'     => $hargaSatuan * $item['qty_diminta'],
-                        'jenis'        => $jenis,
-                    ]);
-
-                    // Update stock_po
-                    $detailSupplierStock = DetailSupplier::where('product_id', $produk->id)
-                        ->where('supplier_id', $request->id_supplier)
-                        ->first();
-
-                    if ($detailSupplierStock) {
-                        $detailSupplierStock->increment('stock_po', $item['qty_diminta']);
-                    }
-                }
+            // Buat PO Items
+            foreach ($itemsToSave as $item) {
+                PurchaseOrderItem::create([
+                    'id_po'                    => $po->id_po,
+                    'id_produk'                => $item['id_produk'],
+                    'nama_produk'              => $item['produk']->nama_produk,
+                    'kode_produk'              => $item['produk']->kode_produk,
+                    'produk_satuan_id'         => $item['produk_satuan_id'],
+                    'konversi_snapshot'        => $item['konversi_snapshot'],
+                    'qty_diminta'              => $item['qty_diminta'],
+                    'qty_diminta_satuan_dasar' => $item['qty_diminta_satuan_dasar'],
+                    'harga_satuan'             => $item['harga'],            // harga asli
+                    // ── Kolom diskon (baru) ──────────────────────────────
+                    'diskon_persen'            => $item['diskon_persen'],
+                    'diskon_nominal'           => $item['diskon_nominal'],
+                    'harga_setelah_diskon'     => $item['harga_setelah_diskon'],
+                    'is_free'                  => $item['is_free'],
+                    // ────────────────────────────────────────────────────
+                    'subtotal'                 => $item['subtotal'],
+                    'detail_gudang_id'         => $item['detail_gudang_id'],
+                    'batch_number'             => $item['batch_number'],
+                    'tanggal_kadaluarsa'       => $item['tanggal_kadaluarsa'],
+                ]);
             }
 
-            /** ===============================
-             * AUDIT TRAIL
-             * =============================== */
+            // Audit Trail
             PoAuditTrail::create([
                 'id_po'          => $po->id_po,
                 'id_karyawan'    => Auth::user()->id_karyawan,
@@ -322,12 +416,6 @@ class PurchaseOrderController extends Controller
                 'data_sesudah'   => $po->toArray(),
             ]);
 
-            /** ===============================
-             * TAGIHAN
-             * =============================== */
-            $tagihanService = new TagihanPoServices();
-            $tagihanService->createTagihanFromPO($po);
-
             DB::commit();
 
             return redirect()
@@ -336,12 +424,10 @@ class PurchaseOrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-
             Log::error('PO Store Error', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-
             return back()->withErrors([
                 'error' => 'Gagal membuat PO: ' . $e->getMessage()
             ])->withInput();
@@ -353,12 +439,14 @@ class PurchaseOrderController extends Controller
     {
         $po = PurchaseOrder::with([
             'items.produk',
+            'items.produkSatuan.satuan',
             'karyawanPemohon',
             'kepalaGudang',
             'kasir',
             'supplier',
             'customer',
-            'auditTrails.karyawan'
+            'auditTrails.karyawan',
+            'proofs'
         ])->findOrFail($id_po);
 
         if (request()->wantsJson()) {
@@ -372,7 +460,7 @@ class PurchaseOrderController extends Controller
     {
         $po = PurchaseOrder::with('items')->findOrFail($id_po);
 
-        if (!in_array($po->status, ['draft', 'ditolak', 'selesai'])) {
+        if (!in_array($po->status, ['draft', 'ditolak'])) {
             return redirect()->route('po.show', $id_po)
                 ->with('error', 'Hanya PO dengan status draft atau ditolak yang dapat diedit');
         }
@@ -381,15 +469,15 @@ class PurchaseOrderController extends Controller
         $customers = Customer::where('status', 'aktif')->get();
 
         if ($po->tipe_po === 'penjualan') {
+            // PO PENJUALAN
             $gudang = Gudang::first();
             if (!$gudang) {
                 return back()->with('error', 'Gudang tidak ditemukan');
             }
 
-            $detailGudangs = DetailGudang::with(['produk'])
+            $detailGudangs = DetailGudang::with(['produk.produkSatuans.satuan'])
                 ->where('gudang_id', $gudang->id)
                 ->where('stock_gudang', '>', 0)
-                ->whereNotNull('barang_id')
                 ->get();
 
             $produkList = [];
@@ -399,25 +487,33 @@ class PurchaseOrderController extends Controller
 
                 $produk = $detail->produk;
 
+                $satuans = $produk->produkSatuans->map(function ($ps) {
+                    return [
+                        'id'         => $ps->id,
+                        'label'      => $ps->satuan->nama_satuan ?? 'PCS',
+                        'konversi'   => (float) $ps->konversi,
+                        'is_default' => (bool) $ps->is_default,
+                    ];
+                })->values()->toArray();
+
                 $produkList[] = [
-                    'id' => $produk->id,
-                    'detail_gudang_id' => $detail->id,
-                    'nama' => $produk->nama_produk,
-                    'merk' => $produk->merk ?? '',
-                    'satuan' => $produk->satuan ?? 'pcs',
-                    'harga_jual' => $produk->harga_jual ?? 0,
-                    'stock_gudang' => $detail->stock_gudang,
-                    'no_batch' => $detail->no_batch ?? '-',
+                    'id'                => $produk->id,
+                    'detail_gudang_id'  => $detail->id,
+                    'nama'              => $produk->nama_produk,
+                    'merk'              => $produk->merk ?? '',
+                    'stock_gudang'      => $detail->stock_gudang,
+                    'no_batch'          => $detail->no_batch ?? '-',
                     'tanggal_kadaluarsa' => $detail->tanggal_kadaluarsa
-                        ? \Carbon\Carbon::parse($detail->tanggal_kadaluarsa)->format('d/m/Y')
+                        ? Carbon::parse($detail->tanggal_kadaluarsa)->format('d/m/Y')
                         : '-',
+                    'satuans'           => $satuans,
                 ];
             }
         } else {
-            // ✅ PO PEMBELIAN - AMBIL DARI DETAIL_SUPPLIER
-            $detailSuppliers = DetailSupplier::with(['supplier', 'produk'])
+            // PO PEMBELIAN
+            $detailSuppliers = DetailSupplier::with(['supplier', 'produk', 'produkSatuan.satuan'])
                 ->where('supplier_id', $po->id_supplier)
-                ->whereNotNull('product_id')
+                ->where('is_aktif', true)
                 ->get();
 
             $produkList = $detailSuppliers->map(function ($detail) {
@@ -430,10 +526,10 @@ class PurchaseOrderController extends Controller
                     'detail_supplier_id' => $detail->id,
                     'supplier_id' => $detail->supplier_id,
                     'nama' => $produk->nama_produk,
-                    'jenis' => $detail->jenis ?? 'lainnya', // ✅ Dari detail_supplier
                     'merk' => $produk->merk ?? '',
-                    'satuan' => $produk->satuan ?? 'pcs',
-                    'harga_beli' => $detail->harga_beli ?? 0, // ✅ Dari detail_supplier
+                    'satuan' => $detail->produkSatuan->satuan->nama_satuan ?? 'PCS',
+                    'produk_satuan_id' => $detail->produk_satuan_id,
+                    'harga_beli' => $detail->harga_beli ?? 0,
                 ];
             })->filter()->values();
         }
@@ -446,182 +542,118 @@ class PurchaseOrderController extends Controller
         $po = PurchaseOrder::findOrFail($id_po);
 
         if (!in_array($po->status, ['draft', 'ditolak'])) {
-            if ($request->wantsJson()) {
-                return response()->json(['error' => 'Hanya PO draft atau ditolak yang dapat diedit'], 400);
-            }
+            if ($request->wantsJson()) return response()->json(['error' => 'Hanya PO draft atau ditolak yang dapat diedit'], 400);
             return back()->with('error', 'Hanya PO dengan status draft atau ditolak yang dapat diedit');
         }
 
-        $validated = $request->validate([
-            'catatan_pemohon' => 'nullable|string',
-            'pin' => 'required|size:6',
-            'items' => 'required|array|min:1',
-            'items.*.id_produk' => 'required|uuid',
-            'items.*.qty_diminta' => 'required|integer|min:1',
-            'items.*.jenis' => 'nullable|string', // ✅ Ubah validasi
+        $request->validate([
+            'catatan_pemohon'          => 'nullable|string',
+            'pin'                      => 'required|size:6',
+            'items'                    => 'required|array|min:1',
+            'items.*.id_produk'        => 'required|uuid',
+            'items.*.produk_satuan_id' => 'nullable|uuid',
+            'items.*.qty_diminta'      => 'required|integer|min:1',
+            'items.*.harga'            => 'nullable|numeric',
+            'items.*.diskon_persen'    => 'nullable|numeric|min:0|max:100',
+            'items.*.diskon_nominal'   => 'nullable|numeric|min:0',
+            'items.*.is_free'          => 'nullable|boolean',
         ]);
 
         $karyawan = Karyawan::where('id_karyawan', Auth::user()->id_karyawan)
-            ->where('pin', $request->pin)
-            ->first();
+            ->where('pin', $request->pin)->first();
 
         if (!$karyawan) {
-            if ($request->wantsJson()) {
-                return response()->json(['error' => 'PIN tidak valid'], 403);
-            }
+            if ($request->wantsJson()) return response()->json(['error' => 'PIN tidak valid'], 403);
             return back()->withErrors(['pin' => 'PIN tidak valid']);
         }
 
         DB::beginTransaction();
         try {
-            $dataBefore = $po->toArray();
+            $dataBefore    = $po->toArray();
             $statusSebelum = $po->status;
-
-            // Delete old items & reset stock_po
-            foreach ($po->items as $oldItem) {
-                if ($po->tipe_po === 'pembelian') {
-                    $detailSupplier = DetailSupplier::where('product_id', $oldItem->id_produk)
-                        ->where('supplier_id', $po->id_supplier)
-                        ->first();
-
-                    if ($detailSupplier) {
-                        $detailSupplier->decrement('stock_po', $oldItem->qty_diminta);
-                    }
-                }
-            }
             $po->items()->delete();
 
-            // Create new items
             $total = 0;
             foreach ($request->items as $item) {
                 $produk = Produk::find($item['id_produk']);
+                if (!$produk) throw new \Exception('Produk tidak ditemukan');
 
-                if (!$produk) {
-                    throw new \Exception('Produk tidak ditemukan');
+                $hargaSatuan      = (float) ($item['harga'] ?? 0);
+                $konversiSnapshot = 1;
+
+                if (!empty($item['produk_satuan_id'])) {
+                    $ps = ProdukSatuan::find($item['produk_satuan_id']);
+                    if ($ps) $konversiSnapshot = (int) $ps->konversi;
                 }
 
-                $hargaSatuan = 0;
-                $jenis = null;
-                
-                if ($po->tipe_po === 'penjualan') {
-                    $hargaSatuan = $produk->harga_jual ?? 0;
-                } else {
-                    // ✅ Pembelian: ambil dari detail_supplier
-                    $detailSupplier = DetailSupplier::where('product_id', $item['id_produk'])
-                        ->where('supplier_id', $po->id_supplier)
-                        ->first();
-                    
-                    if ($detailSupplier) {
-                        $hargaSatuan = $detailSupplier->harga_beli ?? 0;
-                        $jenis = $detailSupplier->jenis ?? 'lainnya';
-                    }
-                }
+                // ── Hitung diskon ──────────────────────────────────
+                $isFree        = !empty($item['is_free']) && (bool) $item['is_free'];
+                $diskonPersen  = $isFree ? 100 : (float) ($item['diskon_persen'] ?? 0);
+                $diskonNominal = $isFree
+                    ? $hargaSatuan
+                    : (float) ($item['diskon_nominal'] ?? ($hargaSatuan * $diskonPersen / 100));
+                $diskonNominal      = min($diskonNominal, $hargaSatuan);
+                $hargaSetelahDiskon = $hargaSatuan - $diskonNominal;
+                // ──────────────────────────────────────────────────
+
+                $qtyDiminta            = (int) $item['qty_diminta'];
+                $qtyDimintaSatuanDasar = $qtyDiminta * $konversiSnapshot;
+                $subtotal              = $hargaSetelahDiskon * $qtyDiminta;
 
                 PurchaseOrderItem::create([
-                    'id_po' => $po->id_po,
-                    'id_produk' => $produk->id,
-                    'nama_produk' => $produk->nama_produk,
-                    'qty_diminta' => $item['qty_diminta'],
-                    'harga_satuan' => $hargaSatuan,
-                    'subtotal' => $hargaSatuan * $item['qty_diminta'],
-                    'jenis' => $jenis, // ✅ Simpan jenis
+                    'id_po'                    => $po->id_po,
+                    'id_produk'                => $produk->id,
+                    'nama_produk'              => $produk->nama_produk,
+                    'produk_satuan_id'         => $item['produk_satuan_id'] ?? null,
+                    'konversi_snapshot'        => $konversiSnapshot,
+                    'qty_diminta'              => $qtyDiminta,
+                    'qty_diminta_satuan_dasar' => $qtyDimintaSatuanDasar,
+                    'harga_satuan'             => $hargaSatuan,
+                    'diskon_persen'            => $diskonPersen,
+                    'diskon_nominal'           => $diskonNominal,
+                    'harga_setelah_diskon'     => $hargaSetelahDiskon,
+                    'is_free'                  => $isFree,
+                    'subtotal'                 => $subtotal,
+                    'kode_produk'              => $produk->kode_produk,
                 ]);
 
-                $total += $hargaSatuan * $item['qty_diminta'];
-
-                // Update stock_po untuk pembelian
-                if ($po->tipe_po === 'pembelian') {
-                    $detailSupplier = DetailSupplier::where('product_id', $produk->id)
-                        ->where('supplier_id', $po->id_supplier)
-                        ->first();
-
-                    if ($detailSupplier) {
-                        $detailSupplier->increment('stock_po', $item['qty_diminta']);
-                    }
-                }
+                $total += $subtotal;
             }
 
-            // Update PO
             $updateData = [
                 'catatan_pemohon' => $request->catatan_pemohon,
-                'total_harga' => $total,
-                'grand_total' => $total + $po->pajak,
+                'total_harga'     => $total,
+                'grand_total'     => $total + $po->pajak,
             ];
-
-            if ($statusSebelum === 'ditolak') {
-                $updateData['status'] = 'draft';
-            }
-
+            if ($statusSebelum === 'ditolak') $updateData['status'] = 'draft';
             $po->update($updateData);
 
-            // ✅ Update tagihan juga
-            if ($po->hasTagihan()) {
-                $tagihan = $po->tagihan;
-                
-                // Delete old tagihan items
-                $tagihan->items()->delete();
-                
-                // Create new tagihan items
-                foreach ($po->items as $item) {
-                    TagihanPoItem::create([
-                        'id_tagihan' => $tagihan->id_tagihan,
-                        'id_po_item' => $item->id_po_item,
-                        'id_produk' => $item->id_produk,
-                        'nama_produk' => $item->nama_produk,
-                        'qty_diminta' => $item->qty_diminta,
-                        'qty_diterima' => 0,
-                        'qty_ditagihkan' => 0,
-                        'harga_satuan' => $item->harga_satuan,
-                        'subtotal' => 0,
-                    ]);
-                }
-                
-                // Update tagihan header
-                $tagihan->update([
-                    'total_tagihan' => $total,
-                    'grand_total' => $total + $po->pajak,
-                    'sisa_tagihan' => ($total + $po->pajak) - $tagihan->total_dibayar,
-                ]);
-            }
-
             $deskripsiAksi = 'Mengupdate PO';
-            if ($statusSebelum === 'ditolak') {
-                $deskripsiAksi .= ' (status berubah dari ditolak menjadi draft)';
-            }
+            if ($statusSebelum === 'ditolak') $deskripsiAksi .= ' (status berubah dari ditolak menjadi draft)';
 
             PoAuditTrail::create([
-                'id_po' => $po->id_po,
-                'id_karyawan' => Auth::user()->id_karyawan,
-                'pin_karyawan' => $request->pin,
-                'aksi' => 'edit_po',
+                'id_po'          => $po->id_po,
+                'id_karyawan'    => Auth::user()->id_karyawan,
+                'pin_karyawan'   => $request->pin,
+                'aksi'           => 'edit_po',
                 'deskripsi_aksi' => $deskripsiAksi,
-                'data_sebelum' => $dataBefore,
-                'data_sesudah' => $po->fresh()->toArray(),
+                'data_sebelum'   => $dataBefore,
+                'data_sesudah'   => $po->fresh()->toArray(),
             ]);
 
             DB::commit();
 
             $successMessage = 'Purchase Order berhasil diupdate';
-            if ($statusSebelum === 'ditolak') {
-                $successMessage .= ' dan status berubah menjadi draft';
-            }
+            if ($statusSebelum === 'ditolak') $successMessage .= ' dan status berubah menjadi draft';
 
             if ($request->wantsJson()) {
-                return response()->json([
-                    'message' => $successMessage,
-                    'data' => $po->load('items')
-                ], 200);
+                return response()->json(['message' => $successMessage, 'data' => $po->load('items.produkSatuan')], 200);
             }
+            return redirect()->route('po.show', $po->id_po)->with('success', $successMessage);
 
-            return redirect()->route('po.show', $po->id_po)
-                ->with('success', $successMessage);
         } catch (\Exception $e) {
             DB::rollBack();
-
-            if ($request->wantsJson()) {
-                return response()->json(['error' => 'Gagal update PO: ' . $e->getMessage()], 500);
-            }
-
+            if ($request->wantsJson()) return response()->json(['error' => 'Gagal update PO: ' . $e->getMessage()], 500);
             return back()->withErrors(['error' => 'Gagal update PO: ' . $e->getMessage()]);
         }
     }
@@ -648,19 +680,6 @@ class PurchaseOrderController extends Controller
 
         DB::beginTransaction();
         try {
-            // Reset stock_po jika pembelian
-            if ($po->tipe_po === 'pembelian') {
-                foreach ($po->items as $item) {
-                    $detailSupplier = DetailSupplier::where('product_id', $item->id_produk)
-                        ->where('supplier_id', $po->id_supplier)
-                        ->first();
-
-                    if ($detailSupplier) {
-                        $detailSupplier->decrement('stock_po', $item->qty_diminta);
-                    }
-                }
-            }
-
             PoAuditTrail::create([
                 'id_po' => $po->id_po,
                 'id_karyawan' => Auth::user()->id_karyawan,
@@ -681,6 +700,36 @@ class PurchaseOrderController extends Controller
         }
     }
 
+    public function saveSuhu(Request $request, $id_po)
+    {
+        $request->validate([
+            'suhu_barang_dikirim' => 'nullable|numeric|between:-99.9,99.9',
+            'suhu_barang_datang'  => 'nullable|numeric|between:-99.9,99.9',
+        ]);
+
+        try {
+            $po = PurchaseOrder::findOrFail($id_po);
+
+            $po->update([
+                'suhu_barang_dikirim' => $request->suhu_barang_dikirim,
+                'suhu_barang_datang'  => $request->suhu_barang_datang,
+            ]);
+
+            return response()->json([
+                'success'             => true,
+                'message'             => 'Data suhu berhasil disimpan',
+                'suhu_barang_dikirim' => $po->suhu_barang_dikirim,
+                'suhu_barang_datang'  => $po->suhu_barang_datang,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan data suhu: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function submit(Request $request, $id_po)
     {
         DB::beginTransaction();
@@ -689,25 +738,22 @@ class PurchaseOrderController extends Controller
             $po = PurchaseOrder::findOrFail($id_po);
             $dataBefore = $po->toArray();
 
-            // Validasi status (opsional tapi sangat disarankan)
             if (!in_array($po->status, ['draft', 'ditolak'])) {
                 return response()->json([
                     'error' => 'PO tidak dapat disubmit pada status saat ini'
                 ], 403);
             }
 
-            // Status berikutnya
             $newStatus = 'menunggu_persetujuan_kepala_gudang';
 
             $po->update([
                 'status' => $newStatus
             ]);
 
-            // Audit Trail
             PoAuditTrail::create([
                 'id_po'        => $po->id_po,
                 'id_karyawan'  => Auth::user()->id_karyawan,
-                'pin_karyawan' => null, // PIN tidak digunakan
+                'pin_karyawan' => null,
                 'aksi'         => 'submit_approval',
                 'deskripsi_aksi' => 'Mengirim PO untuk persetujuan kepala gudang',
                 'data_sebelum' => $dataBefore,
@@ -732,8 +778,6 @@ class PurchaseOrderController extends Controller
 
     /**
      * APPROVE BY KEPALA GUDANG
-     * - PO Penjualan: Generate no_gr dan set status 'dikirim'
-     * - PO Pembelian: Lanjut ke approval kasir
      */
     public function approveKepalaGudang(Request $request, $id_po)
     {
@@ -769,10 +813,8 @@ class PurchaseOrderController extends Controller
             ]);
 
             if ($request->status_approval === 'ditolak') {
-                // Jika ditolak, ubah status ke ditolak
                 $po->update(['status' => 'ditolak']);
 
-                // Audit Trail
                 PoAuditTrail::create([
                     'id_po' => $po->id_po,
                     'id_karyawan' => Auth::user()->id_karyawan,
@@ -789,10 +831,9 @@ class PurchaseOrderController extends Controller
 
             // Jika disetujui
             if ($po->tipe_po === 'penjualan') {
-                // ✅ PO PENJUALAN: Generate no_gr dan set status ke 'dikirim'
+                // PO PENJUALAN: Generate no_gr dan set status ke 'dikirim'
                 $noGR = PurchaseOrder::generateNoGR();
 
-                // ✅ Status = 'dikirim' (bukan 'diterima')
                 $po->update([
                     'status' => 'dikirim',
                     'no_gr' => $noGR,
@@ -812,7 +853,6 @@ class PurchaseOrderController extends Controller
                 $deskripsi = 'Kepala Gudang menyetujui PO Pembelian - Menunggu approval Kasir';
             }
 
-            // Audit Trail
             PoAuditTrail::create([
                 'id_po' => $po->id_po,
                 'id_karyawan' => Auth::user()->id_karyawan,
@@ -833,6 +873,7 @@ class PurchaseOrderController extends Controller
                 'message' => $message,
                 'data' => $po->fresh()
             ], 200);
+
         } catch (\Exception $e) {
             DB::rollBack();
             
@@ -846,18 +887,30 @@ class PurchaseOrderController extends Controller
         }
     }
 
+    /**
+     * TERIMA BARANG (untuk PO Pembelian)
+     * Method ini akan:
+     * 1. Update status PO menjadi 'diterima'
+     * 2. Buat entry di stock_movements untuk setiap item
+     * 3. Update stok di detail_gudangs
+     */
     public function markAsReceived(Request $request, $id_po)
     {
         $validator = Validator::make($request->all(), [
             'pin' => 'required|size:6',
             'catatan' => 'nullable|string',
+            'items' => 'required|array',
+            'items.*.id_po_item' => 'required|uuid',
+            'items.*.qty_diterima' => 'required|integer|min:0',
+            'items.*.no_batch' => 'nullable|string|max:50',
+            'items.*.tanggal_kadaluarsa' => 'nullable|date',
+            'items.*.kondisi' => 'nullable|in:Baik,Rusak,Kadaluarsa',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        
         $karyawan = Karyawan::where('id_karyawan', Auth::user()->id_karyawan)
             ->where('pin', $request->pin)
             ->first();
@@ -868,27 +921,112 @@ class PurchaseOrderController extends Controller
 
         DB::beginTransaction();
         try {
-            $po = PurchaseOrder::findOrFail($id_po);
+            $po = PurchaseOrder::with(['items', 'supplier'])->findOrFail($id_po);
 
-            
-            if (!in_array($po->status, ['disetujui'])) {
+            // Validasi: hanya PO pembelian yang bisa diterima
+            if ($po->tipe_po !== 'pembelian') {
                 return response()->json([
-                    'error' => 'PO tidak dapat ditandai sebagai diterima. Status saat ini: ' . $po->status
+                    'error' => 'Hanya PO Pembelian yang dapat ditandai sebagai diterima'
+                ], 400);
+            }
+
+            // Validasi status
+            if (!in_array($po->status, ['disetujui', 'dikirim_ke_supplier'])) {
+                return response()->json([
+                    'error' => 'PO tidak dapat diterima. Status saat ini: ' . $po->status
                 ], 400);
             }
 
             $dataBefore = $po->toArray();
-
-            
             $noGR = PurchaseOrder::generateNoGR();
 
-            
+            // Update status PO
             $po->update([
                 'status' => 'diterima',
-                'no_gr' => $noGR,  
+                'no_gr' => $noGR,
+                'id_penerima' => Auth::user()->id_karyawan,
+                'tanggal_diterima' => now(),
+                'catatan_penerima' => $request->catatan,
             ]);
 
-            
+            // Proses setiap item yang diterima
+            foreach ($request->items as $itemData) {
+                $poItem = PurchaseOrderItem::find($itemData['id_po_item']);
+                if (!$poItem) continue;
+
+                $qtyDiterima = $itemData['qty_diterima'];
+                $qtyDiterimaSatuanDasar = $qtyDiterima * $poItem->konversi_snapshot;
+
+                // Update qty diterima di PO Item
+                $poItem->update([
+                    'qty_diterima' => $qtyDiterima,
+                    'qty_diterima_satuan_dasar' => $qtyDiterimaSatuanDasar,
+                ]);
+
+                // Cari gudang tujuan (misal: gudang pertama atau berdasarkan konfigurasi)
+                $gudang = Gudang::first();
+                if (!$gudang) {
+                    throw new \Exception('Gudang tidak ditemukan');
+                }
+
+                // Cek apakah sudah ada detail_gudang untuk produk + supplier + batch ini
+                $detailGudang = DetailGudang::where('gudang_id', $gudang->id)
+                    ->where('produk_id', $poItem->id_produk)
+                    ->where('supplier_id', $po->id_supplier)
+                    ->where('no_batch', $itemData['no_batch'] ?? null)
+                    ->first();
+
+                if ($detailGudang) {
+                    // Update stok yang sudah ada
+                    $stokSebelum = $detailGudang->stock_gudang;
+                    $detailGudang->increment('stock_gudang', $qtyDiterimaSatuanDasar);
+                    $stokSesudah = $stokSebelum + $qtyDiterimaSatuanDasar;
+
+                    // Update tanggal kadaluarsa jika ada dan berbeda
+                    if (!empty($itemData['tanggal_kadaluarsa']) && $detailGudang->tanggal_kadaluarsa != $itemData['tanggal_kadaluarsa']) {
+                        // Lebih baik buat baris baru daripada update batch yang berbeda
+                        // Tapi untuk sederhananya, kita update tanggal kadaluarsa
+                        $detailGudang->update([
+                            'tanggal_kadaluarsa' => $itemData['tanggal_kadaluarsa']
+                        ]);
+                    }
+                } else {
+                    // Buat detail gudang baru
+                    $stokSebelum = 0;
+                    $detailGudang = DetailGudang::create([
+                        'gudang_id' => $gudang->id,
+                        'produk_id' => $poItem->id_produk,
+                        'supplier_id' => $po->id_supplier,
+                        'stock_gudang' => $qtyDiterimaSatuanDasar,
+                        'min_persediaan' => 0,
+                        'no_batch' => $itemData['no_batch'] ?? null,
+                        'tanggal_masuk' => now(),
+                        'tanggal_produksi' => null,
+                        'tanggal_kadaluarsa' => $itemData['tanggal_kadaluarsa'] ?? null,
+                        'kondisi' => $itemData['kondisi'] ?? 'Baik',
+                    ]);
+                    $stokSesudah = $qtyDiterimaSatuanDasar;
+                }
+
+                // Buat entry stock movement
+                StockMovement::create([
+                    'gudang_id' => $gudang->id,
+                    'produk_id' => $poItem->id_produk,
+                    'tipe' => 'pembelian',
+                    'referensi_tipe' => 'purchase_orders',
+                    'referensi_id' => $po->id_po,
+                    'referensi_no' => $po->no_po,
+                    'qty_sebelum' => $stokSebelum,
+                    'qty_perubahan' => $qtyDiterimaSatuanDasar, // Positif = masuk
+                    'qty_sesudah' => $stokSesudah,
+                    'no_batch' => $itemData['no_batch'] ?? null,
+                    'tanggal_kadaluarsa' => $itemData['tanggal_kadaluarsa'] ?? null,
+                    'id_karyawan' => Auth::user()->id_karyawan,
+                    'catatan' => "Penerimaan dari PO: {$po->no_po}",
+                ]);
+            }
+
+            // Audit Trail
             PoAuditTrail::create([
                 'id_po' => $po->id_po,
                 'id_karyawan' => Auth::user()->id_karyawan,
@@ -905,15 +1043,15 @@ class PurchaseOrderController extends Controller
             Log::info('PO Marked as Received', [
                 'po_id' => $po->id_po,
                 'no_po' => $po->no_po,
-                'no_gr' => $noGR, 
+                'no_gr' => $noGR,
                 'by_user' => Auth::user()->id_karyawan,
             ]);
 
             return response()->json([
-                'message' => 'Barang dari supplier berhasil ditandai sebagai diterima dengan nomor GR: ' . $noGR . '. Silakan lakukan konfirmasi penerimaan untuk update stok gudang.',
+                'message' => 'Barang dari supplier berhasil ditandai sebagai diterima dengan nomor GR: ' . $noGR . '. Stok gudang telah diperbarui.',
                 'data' => [
-                    'po' => $po->fresh()->load(['items']),
-                    'no_gr' => $noGR  
+                    'po' => $po->fresh()->load(['items', 'supplier']),
+                    'no_gr' => $noGR
                 ]
             ], 200);
 
@@ -932,10 +1070,96 @@ class PurchaseOrderController extends Controller
         }
     }
 
+    public function customerReceive(Request $request, $id_po)
+    {
+        $request->validate([
+            'pin' => 'required|size:6'
+        ]);
+
+        $karyawan = Karyawan::where('id_karyawan', Auth::user()->id_karyawan)
+            ->where('pin', $request->pin)
+            ->first();
+
+        if (!$karyawan) {
+            return response()->json(['success' => false, 'message' => 'PIN tidak valid'], 403);
+        }
+
+        DB::beginTransaction();
+        try {
+            $po = PurchaseOrder::findOrFail($id_po);
+
+            if ($po->tipe_po !== 'penjualan') {
+                return response()->json(['success' => false, 'message' => 'Bukan PO Penjualan'], 400);
+            }
+
+            if ($po->status !== 'dikirim') {
+                return response()->json(['success' => false, 'message' => 'Status PO tidak valid'], 400);
+            }
+
+            $dataBefore = $po->toArray();
+
+            $po->update([
+                'status'           => 'selesai',
+                'id_penerima'      => Auth::user()->id_karyawan,
+                'tanggal_diterima' => now(),
+            ]);
+
+            PoAuditTrail::create([
+                'id_po'          => $po->id_po,
+                'id_karyawan'    => Auth::user()->id_karyawan,
+                'pin_karyawan'   => $request->pin,
+                'aksi'           => 'konfirmasi_penerimaan_customer',
+                'deskripsi_aksi' => 'Customer mengkonfirmasi penerimaan barang',
+                'data_sebelum'   => $dataBefore,
+                'data_sesudah'   => $po->fresh()->toArray(),
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Penerimaan barang oleh customer berhasil dikonfirmasi'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Customer Receive Error', [
+                'po_id' => $id_po,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal konfirmasi: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function showReceiveForm($id_po)
+    {
+        $po = PurchaseOrder::with([
+            'items.produk',
+            'items.produkSatuan.satuan',
+            'supplier'
+        ])->findOrFail($id_po);
+
+        // Validasi: hanya PO pembelian dengan status 'disetujui' atau 'dikirim_ke_supplier'
+        if ($po->tipe_po !== 'pembelian') {
+            return redirect()->route('po.show', $id_po)
+                ->with('error', 'Hanya PO Pembelian yang dapat diterima');
+        }
+
+        if (!in_array($po->status, ['disetujui', 'dikirim_ke_supplier'])) {
+            return redirect()->route('po.show', $id_po)
+                ->with('error', 'PO tidak dapat diterima. Status saat ini: ' . $po->status);
+        }
+
+        return view('po.receive-form', compact('po'));
+    }
+
     public function printInvoice($id_po)
     {
         $po = PurchaseOrder::with([
-            'items',
+            'items.produk',
             'supplier',
             'customer',
             'karyawanPemohon',
@@ -944,7 +1168,6 @@ class PurchaseOrderController extends Controller
             'kasir'
         ])->findOrFail($id_po);
 
-        // Pastikan PO sudah ada invoice
         if (!$po->hasInvoice()) {
             abort(404, 'Invoice belum tersedia untuk PO ini');
         }
@@ -981,18 +1204,25 @@ class PurchaseOrderController extends Controller
                 ? 'disetujui'
                 : 'ditolak';
 
-            $po->update([
-                'id_kasir_approval' => Auth::user()->id_karyawan,
+            $updateData = [
+                'id_kasir_approval'      => Auth::user()->id_karyawan,
                 'tanggal_approval_kasir' => now(),
-                'catatan_kasir' => $request->catatan,
-                'status_approval_kasir' => $request->status_approval,
-                'status' => $statusPO,
-            ]);
+                'catatan_kasir'          => $request->catatan,
+                'status_approval_kasir'  => $request->status_approval,
+                'status'                 => $statusPO,
+            ];
 
-            // Audit Trail
+            // Generate GR otomatis saat kasir approve PO Pembelian
+            if ($request->status_approval === 'disetujui' && $po->tipe_po === 'pembelian') {
+                $noGR = PurchaseOrder::generateNoGR();
+                $updateData['no_gr'] = $noGR;
+            }
+
+            $po->update($updateData);
+
             $aksi = $request->status_approval === 'disetujui' ? 'approve_kasir' : 'reject_kasir';
             $deskripsi = $request->status_approval === 'disetujui'
-                ? 'Kasir menyetujui PO'
+                ? 'Kasir menyetujui PO' . (isset($noGR) ? " - Nomor GR: {$noGR}" : '')
                 : 'Kasir menolak PO';
 
             PoAuditTrail::create([
@@ -1006,7 +1236,11 @@ class PurchaseOrderController extends Controller
             ]);
 
             DB::commit();
-            return response()->json(['message' => 'Approval Kasir berhasil', 'data' => $po], 200);
+            $message = 'Approval Kasir berhasil';
+            if (isset($noGR)) {
+                $message .= ". Nomor GR: {$noGR}";
+            }
+            return response()->json(['message' => $message, 'data' => $po->fresh()], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => 'Gagal approve: ' . $e->getMessage()], 500);
@@ -1073,41 +1307,7 @@ class PurchaseOrderController extends Controller
         return view('po.print', compact('po'));
     }
 
-    // Backward compatibility methods
-    public function createInternalPO(Request $request)
-    {
-        $request->merge(['tipe_po' => 'penjualan']);
-        return $this->store($request);
-    }
-
-    public function createExternalPO(Request $request)
-    {
-        $request->merge(['tipe_po' => 'pembelian']);
-        return $this->store($request);
-    }
-
-    public function submitInternalPO(Request $request, $id_po)
-    {
-        return $this->submit($request, $id_po);
-    }
-
-    public function submitExternalPO(Request $request, $id_po)
-    {
-        return $this->submit($request, $id_po);
-    }
-
-    // ========== API: APPROVE BY KEPALA GUDANG (backward compatibility) ==========
-    public function approveByKepalaGudang(Request $request, $id_po)
-    {
-        return $this->approveKepalaGudang($request, $id_po);
-    }
-
-    // ========== API: APPROVE BY KASIR (backward compatibility) ==========
-    public function approveByKasir(Request $request, $id_po)
-    {
-        return $this->approveKasir($request, $id_po);
-    }
-
+    // ========== API: UPLOAD BUKTI ==========
     public function uploadProof(Request $request, $id_po)
     {
         try {
@@ -1118,7 +1318,6 @@ class PurchaseOrderController extends Controller
                 'has_barang' => $request->hasFile('bukti_barang'),
             ]);
 
-            // Validasi - minimal satu file harus ada
             $validator = Validator::make($request->all(), [
                 'bukti_invoice' => [
                     'nullable',
@@ -1142,74 +1341,43 @@ class PurchaseOrderController extends Controller
                     'nullable',
                     'boolean'
                 ]
-            ], [
-                'bukti_invoice.file' => 'Bukti invoice harus berupa file yang valid',
-                'bukti_invoice.mimes' => 'Format bukti invoice harus JPEG, JPG, PNG, atau PDF',
-                'bukti_invoice.max' => 'Ukuran bukti invoice maksimal 5MB',
-                'bukti_barang.file' => 'Bukti barang harus berupa file yang valid',
-                'bukti_barang.mimes' => 'Format bukti barang harus JPEG, JPG, PNG, atau PDF',
-                'bukti_barang.max' => 'Ukuran bukti barang maksimal 5MB',
-                'pin.required' => 'PIN harus diisi',
-                'pin.size' => 'PIN harus 6 digit',
-                'pin.regex' => 'PIN harus berupa 6 digit angka',
             ]);
 
             if ($validator->fails()) {
-                Log::warning('Validation failed for proof upload', [
-                    'errors' => $validator->errors()->toArray(),
-                    'po_id' => $id_po
-                ]);
-                
                 return response()->json([
                     'error' => $validator->errors()->first(),
                     'errors' => $validator->errors()
                 ], 422);
             }
 
-            // Minimal satu file harus ada
             if (!$request->hasFile('bukti_invoice') && !$request->hasFile('bukti_barang')) {
                 return response()->json([
                     'error' => 'Minimal satu file (Invoice atau Barang) harus diupload'
                 ], 422);
             }
 
-            // Verifikasi PIN
             $karyawan = Karyawan::where('id_karyawan', Auth::user()->id_karyawan)
                 ->where('pin', $request->pin)
                 ->first();
 
             if (!$karyawan) {
-                Log::warning('Invalid PIN for proof upload', [
-                    'user_id' => Auth::user()->id_karyawan,
-                    'po_id' => $id_po
-                ]);
-                
-                return response()->json([
-                    'error' => 'PIN yang Anda masukkan tidak valid'
-                ], 403);
+                return response()->json(['error' => 'PIN tidak valid'], 403);
             }
 
-            // Cari PO
             $po = PurchaseOrder::find($id_po);
             
             if (!$po) {
-                Log::error('PO not found', ['po_id' => $id_po]);
-                return response()->json([
-                    'error' => 'Purchase Order tidak ditemukan'
-                ], 404);
+                return response()->json(['error' => 'Purchase Order tidak ditemukan'], 404);
             }
 
             DB::beginTransaction();
             try {
                 $uploadedFiles = [];
                 $deskripsiAksi = [];
-                
-                // ✅ Cek apakah ini mode replace atau add
                 $replaceMode = $request->input('replace_mode', false);
 
                 // Upload Bukti Invoice
                 if ($request->hasFile('bukti_invoice')) {
-                    // ✅ Hanya non-aktifkan jika mode replace
                     if ($replaceMode) {
                         PoProof::where('id_po', $id_po)
                             ->where('tipe_bukti', 'invoice')
@@ -1230,7 +1398,6 @@ class PurchaseOrderController extends Controller
                         throw new \Exception('Gagal menyimpan bukti invoice');
                     }
 
-                    // ✅ Simpan bukti baru ke tabel po_proofs
                     PoProof::create([
                         'id_po' => $id_po,
                         'tipe_bukti' => 'invoice',
@@ -1249,7 +1416,6 @@ class PurchaseOrderController extends Controller
 
                 // Upload Bukti Barang
                 if ($request->hasFile('bukti_barang')) {
-                    // ✅ Hanya non-aktifkan jika mode replace
                     if ($replaceMode) {
                         PoProof::where('id_po', $id_po)
                             ->where('tipe_bukti', 'barang')
@@ -1270,7 +1436,6 @@ class PurchaseOrderController extends Controller
                         throw new \Exception('Gagal menyimpan bukti barang');
                     }
 
-                    // ✅ Simpan bukti baru ke tabel po_proofs
                     PoProof::create([
                         'id_po' => $id_po,
                         'tipe_bukti' => 'barang',
@@ -1287,29 +1452,21 @@ class PurchaseOrderController extends Controller
                     $deskripsiAksi[] = ($replaceMode ? 'Replace' : 'Tambah') . ' bukti barang: ' . $fileName;
                 }
 
-                // Audit Trail
                 PoAuditTrail::create([
                     'id_po' => $po->id_po,
                     'id_karyawan' => Auth::user()->id_karyawan,
                     'pin_karyawan' => $request->pin,
                     'aksi' => 'upload_bukti',
                     'deskripsi_aksi' => implode('; ', $deskripsiAksi),
-                    'data_sebelum' => json_encode(['total_proofs' => $po->proofs()->count()]),
-                    'data_sesudah' => json_encode(['total_proofs' => $po->fresh()->proofs()->count()]),
+                    'data_sebelum' => ['total_proofs' => $po->proofs()->count()],
+                    'data_sesudah' => ['total_proofs' => $po->fresh()->proofs()->count()],
                 ]);
 
                 DB::commit();
 
-                Log::info('Proof Uploaded Successfully', [
-                    'po_id' => $po->id_po,
-                    'files' => $uploadedFiles,
-                    'uploaded_by' => Auth::user()->id_karyawan,
-                    'mode' => $replaceMode ? 'replace' : 'add'
-                ]);
-
                 $message = count($uploadedFiles) > 1 
                     ? 'Bukti invoice dan barang berhasil diupload'
-                    : 'Bukti ' . (isset($uploadedFiles[0]) && strpos($uploadedFiles[0], 'invoice') !== false ? 'invoice' : 'barang') . ' berhasil diupload';
+                    : 'Bukti ' . (strpos($uploadedFiles[0], 'invoice') !== false ? 'invoice' : 'barang') . ' berhasil diupload';
 
                 return response()->json([
                     'message' => $message,
@@ -1320,23 +1477,13 @@ class PurchaseOrderController extends Controller
 
             } catch (\Exception $e) {
                 DB::rollBack();
-                
-                Log::error('Transaction failed during proof upload', [
-                    'po_id' => $id_po,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
-                
                 throw $e;
             }
 
         } catch (\Exception $e) {
             Log::error('Upload Proof Error', [
                 'po_id' => $id_po,
-                'user_id' => Auth::user()->id_karyawan ?? null,
                 'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
             ]);
 
             return response()->json([
@@ -1360,29 +1507,23 @@ class PurchaseOrderController extends Controller
                 ], 422);
             }
 
-            // Verify PIN
             $karyawan = Karyawan::where('id_karyawan', Auth::user()->id_karyawan)
                 ->where('pin', $request->pin)
                 ->first();
 
             if (!$karyawan) {
-                return response()->json([
-                    'error' => 'PIN tidak valid'
-                ], 403);
+                return response()->json(['error' => 'PIN tidak valid'], 403);
             }
 
             $po = PurchaseOrder::find($id_po);
             if (!$po) {
-                return response()->json([
-                    'error' => 'Purchase Order tidak ditemukan'
-                ], 404);
+                return response()->json(['error' => 'Purchase Order tidak ditemukan'], 404);
             }
 
             DB::beginTransaction();
             try {
                 $type = $request->type;
                 
-                // Jika ada id_proof spesifik, hapus bukti tersebut
                 if ($request->id_proof) {
                     $proof = PoProof::where('id_po_proof', $request->id_proof)
                         ->where('id_po', $id_po)
@@ -1390,33 +1531,26 @@ class PurchaseOrderController extends Controller
                         ->first();
                         
                     if (!$proof) {
-                        return response()->json([
-                            'error' => 'Bukti tidak ditemukan'
-                        ], 404);
+                        return response()->json(['error' => 'Bukti tidak ditemukan'], 404);
                     }
                     
-                    // Hapus file fisik
                     if (Storage::disk('public')->exists($proof->file_path)) {
                         Storage::disk('public')->delete($proof->file_path);
                     }
                     
-                    // Soft delete
                     $proof->delete();
                     
                     $message = 'Bukti ' . $type . ' berhasil dihapus';
                     $aksi = 'delete_bukti_' . $type;
                     
                 } else {
-                    // Hapus semua bukti aktif dari tipe tertentu
                     $proofs = PoProof::where('id_po', $id_po)
                         ->where('tipe_bukti', $type)
                         ->where('is_active', true)
                         ->get();
                     
                     if ($proofs->isEmpty()) {
-                        return response()->json([
-                            'error' => 'Bukti ' . $type . ' tidak ditemukan'
-                        ], 404);
+                        return response()->json(['error' => 'Bukti ' . $type . ' tidak ditemukan'], 404);
                     }
                     
                     foreach ($proofs as $proof) {
@@ -1436,15 +1570,13 @@ class PurchaseOrderController extends Controller
                     'pin_karyawan' => $request->pin,
                     'aksi' => $aksi,
                     'deskripsi_aksi' => $message,
-                    'data_sebelum' => json_encode(['deleted_count' => $proofs->count() ?? 1]),
-                    'data_sesudah' => json_encode(['bukti_count' => $po->fresh()->proofs()->count()]),
+                    'data_sebelum' => ['deleted_count' => isset($proofs) ? $proofs->count() : 1],
+                    'data_sesudah' => ['bukti_count' => $po->fresh()->proofs()->count()],
                 ]);
 
                 DB::commit();
 
-                return response()->json([
-                    'message' => $message
-                ], 200);
+                return response()->json(['message' => $message], 200);
 
             } catch (\Exception $e) {
                 DB::rollBack();
@@ -1454,7 +1586,6 @@ class PurchaseOrderController extends Controller
         } catch (\Exception $e) {
             Log::error('Delete Proof Error', [
                 'po_id' => $id_po,
-                'type' => $request->type ?? null,
                 'error' => $e->getMessage()
             ]);
 
@@ -1464,56 +1595,42 @@ class PurchaseOrderController extends Controller
         }
     }
 
-    
     public function getCompleted(Request $request)
     {
         try {
             $query = PurchaseOrder::with(['supplier', 'customer', 'items'])
-                ->whereIn('status', ['completed', 'diterima', 'selesai'])
+                ->whereIn('status', ['diterima', 'selesai'])
                 ->whereNotNull('no_gr')
-                ->whereNotNull('no_invoice')
                 ->orderBy('tanggal_permintaan', 'desc');
 
-            // Optional: Filter by supplier
             if ($request->has('supplier_id')) {
                 $query->where('id_supplier', $request->supplier_id);
             }
 
-            // Optional: Search
             if ($request->has('search')) {
                 $search = $request->search;
                 $query->where(function($q) use ($search) {
                     $q->where('no_po', 'like', "%{$search}%")
-                    ->orWhere('no_gr', 'like', "%{$search}%")
-                    ->orWhere('no_invoice', 'like', "%{$search}%")
-                    ->orWhere('kode_po', 'like', "%{$search}%");
+                      ->orWhere('no_gr', 'like', "%{$search}%")
+                      ->orWhere('no_invoice', 'like', "%{$search}%");
                 });
             }
 
-            // Limit untuk performance
             $purchaseOrders = $query->limit(100)->get();
 
             return response()->json([
                 'success' => true,
                 'data' => $purchaseOrders->map(function($po) {
                     return [
-                        'id' => $po->id,
-                        'id_po' => $po->id_po ?? $po->id,
+                        'id' => $po->id_po,
                         'no_po' => $po->no_po,
                         'no_gr' => $po->no_gr,
                         'no_invoice' => $po->no_invoice,
-                        'kode_po' => $po->kode_po ?? $po->no_po,
                         'tanggal_permintaan' => $po->tanggal_permintaan,
-                        'tanggal_pengiriman' => $po->tanggal_pengiriman ?? null,
                         'status' => $po->status,
-                        'supplier' => [
-                            'id' => $po->supplier->id ?? null,
-                            'nama' => $po->supplier->nama_supplier ?? $po->supplier->nama ?? 'N/A',
-                            'nama_supplier' => $po->supplier->nama_supplier ?? $po->supplier->nama ?? 'N/A',
-                        ],
-                        'customer' => $po->customer ? [
-                            'id' => $po->customer->id,
-                            'nama' => $po->customer->nama_customer ?? 'N/A',
+                        'supplier' => $po->supplier ? [
+                            'id' => $po->supplier->id,
+                            'nama' => $po->supplier->nama_supplier,
                         ] : null,
                         'total_items' => $po->items->count(),
                     ];
@@ -1522,7 +1639,7 @@ class PurchaseOrderController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Error getting completed POs: ' . $e->getMessage());
+            Log::error('Error getting completed POs: ' . $e->getMessage());
             
             return response()->json([
                 'success' => false,
@@ -1532,35 +1649,24 @@ class PurchaseOrderController extends Controller
         }
     }
 
-    /**
-     * Get PO items dengan batches
-     * Endpoint: GET /api/purchase-orders/{id}/items
-     */
     public function getItems($id)
     {
         try {
             $po = PurchaseOrder::with([
                 'items.produk',
-                'items.batches'
+                'items.produkSatuan.satuan'
             ])->findOrFail($id);
 
-            $items = $po->purchaseOrderItems->map(function($item) {
+            $items = $po->items->map(function($item) {
                 return [
-                    'id_po_item' => $item->id_po_item ?? $item->id,
+                    'id_po_item' => $item->id_po_item,
                     'id_produk' => $item->id_produk,
                     'nama_produk' => $item->nama_produk,
-                    'qty_dipesan' => $item->qty_dipesan ?? $item->qty,
-                    'qty_diterima' => $item->qty_diterima ?? $item->qty,
-                    'harga_satuan' => $item->harga_satuan ?? 0,
-                    'satuan' => $item->satuan ?? 'pcs',
-                    'batches' => $item->batches ? $item->batches->map(function($batch) {
-                        return [
-                            'batch_number' => $batch->batch_number,
-                            'tanggal_kadaluarsa' => $batch->tanggal_kadaluarsa,
-                            'qty_diterima' => $batch->qty_diterima ?? $batch->qty,
-                            'kondisi' => $batch->kondisi ?? 'baik',
-                        ];
-                    }) : [],
+                    'qty_diminta' => $item->qty_diminta,
+                    'qty_diterima' => $item->qty_diterima ?? 0,
+                    'harga_satuan' => $item->harga_satuan,
+                    'satuan' => $item->produkSatuan->satuan->nama_satuan ?? 'PCS',
+                    'konversi' => $item->konversi_snapshot,
                 ];
             });
 
@@ -1571,7 +1677,7 @@ class PurchaseOrderController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Error getting PO items: ' . $e->getMessage());
+            Log::error('Error getting PO items: ' . $e->getMessage());
             
             return response()->json([
                 'success' => false,
@@ -1591,7 +1697,6 @@ class PurchaseOrderController extends Controller
         ->orderBy('created_at', 'desc')
         ->paginate(20);
 
-        // Add deadline info untuk setiap PO
         $pos->getCollection()->transform(function($po) {
             $po->hours_left = $po->hoursLeftBeforeCancel();
             $po->is_near_deadline = $po->isNearDeadline();
@@ -1599,5 +1704,36 @@ class PurchaseOrderController extends Controller
         });
 
         return view('po.pending', compact('pos'));
+    }
+
+    public function getHargaCustomer(Request $request)
+    {
+        $request->validate([
+            'customer_id'      => 'required|uuid',
+            'produk_id'        => 'required|uuid',
+            'produk_satuan_id' => 'nullable|uuid',
+        ]);
+
+        $detailCustomer = DetailCustomer::where('customer_id', $request->customer_id)
+            ->where('produk_id', $request->produk_id)
+            ->when(
+                $request->filled('produk_satuan_id'),
+                fn($q) => $q->where('produk_satuan_id', $request->produk_satuan_id)
+            )
+            ->first();
+
+        if (!$detailCustomer) {
+            return response()->json([
+                'found' => false,
+                'harga' => 0,
+                'message' => 'Harga tidak ditemukan untuk customer & produk ini'
+            ]);
+        }
+
+        return response()->json([
+            'found' => true,
+            'harga' => (float) $detailCustomer->harga_jual,
+            'message' => 'OK'
+        ]);
     }
 }

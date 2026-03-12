@@ -10,6 +10,7 @@ class EvaluationProgram extends Model
     use HasFactory;
 
     protected $fillable = [
+        'sop_id',
         'title',
         'materi_pelatihan',
         'hari_tanggal',

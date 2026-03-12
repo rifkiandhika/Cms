@@ -25,13 +25,17 @@ class GalleryController extends Controller
 
     public function store(Request $request)
     {
+        // dd($request->all());
         $request->validate([
+            
+            'sop_id' => 'nullable|exists:sops,id',
             'judul' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',
             'images.*' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048'
         ]);
 
         $gallery = Gallery::create([
+            'sop_id' => $request->sop_id ?? null,
             'judul' => $request->judul,
             'deskripsi' => $request->deskripsi
         ]);
@@ -62,12 +66,14 @@ class GalleryController extends Controller
     public function update(Request $request, Gallery $gallery)
     {
         $request->validate([
+            'sop_id' => 'nullable|exists:sops,id',
             'judul' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',
             'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048'
         ]);
 
         $gallery->update([
+            'sop_id' => $request->sop_id ?? null,
             'judul' => $request->judul,
             'deskripsi' => $request->deskripsi
         ]);

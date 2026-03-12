@@ -50,4 +50,38 @@ class Sop extends Model
     {
         return $query->where('status', 'archived');
     }
+
+    public function trainingPrograms()
+    {
+        return $this->hasMany(TrainingProgram::class);
+    }
+
+    public function evaluationPrograms()
+    {
+        return $this->hasMany(EvaluationProgram::class);
+    }
+    public function attendanceForms()
+    {
+        return $this->hasMany(AttendanceForm::class);
+    }
+
+    public function galleries()
+    {
+        return $this->hasMany(Gallery::class);
+    }
+
+    public function kontrolGudang()
+    {
+        return $this->hasMany(KontrolGudang::class);
+    }
+
+    public function pengendalianHama()
+    {
+        return $this->hasMany(PengendalianHama::class);
+    }
+
+    public function jadwalKaryawan()
+    {
+        return $this->hasMany(JadwalKaryawan::class);
+    }
 }

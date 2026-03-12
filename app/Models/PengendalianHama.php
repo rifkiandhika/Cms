@@ -12,6 +12,7 @@ class PengendalianHama extends Model
     protected $table = 'pengendalian_hamas';
 
     protected $fillable = [
+        'sop_id',
         'lokasi',
         'bulan',
         'tahun',

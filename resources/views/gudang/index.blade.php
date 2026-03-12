@@ -147,39 +147,55 @@
                             <table class="table table-hover table-striped align-middle" id="gudangTable">
                                 <thead class="table-light">
                                     <tr>
-                                        <th width="50">No</th>
-                                        <th>Supplier</th>
-                                        <th width="150">Jumlah Barang</th>
-                                        <th width="150">Tanggal Dibuat</th>
-                                        <th width="150" class="text-center">Action</th>
+                                        <th width="50" class="text-center">No</th>
+                                        <th>Kode Gudang</th>
+                                        <th>Kategori Obat</th>
+                                        {{-- <th width="150">Jumlah Barang</th> --}}
+                                        <th>Tanggal Dibuat</th>
+                                        <th>Status</th>
+                                        <th class="text-center">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @forelse ($gudangs as $x => $data)
                                         <tr>
                                             <td class="text-center">{{ $x + 1 }}</td>
+                                            <td><strong>{{ $data->kode_gudang }}</strong></td>
                                             <td>
                                                 <div class="d-flex align-items-center">
                                                     <div class="avatar-xs me-2">
                                                         <span class="avatar-title rounded-circle bg-soft-primary text-primary">
-                                                            {{ substr($data->supplier->nama_supplier ?? 'N', 0, 1) }}
+                                                            {{ substr($data->nama_gudang ?? 'N', 0, 1) }}
                                                         </span>
                                                     </div>
                                                     <div>
-                                                        <strong>{{ $data->supplier->nama_supplier ?? '-' }}</strong>
+                                                        <strong>{{ $data->nama_gudang ?? '-' }}</strong>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td class="text-center">
+                                            {{-- <td class="text-center">
                                                 <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#detailModal{{ $data->id }}">
                                                     <i class="ri-eye-line me-1"></i>
                                                     Lihat ({{ $data->details->count() }})
                                                 </button>
-                                            </td>
+                                            </td> --}}
                                             <td>
                                                 <small class="text-muted">
                                                     <i class="ri-calendar-line"></i> {{ $data->created_at->format('d/m/Y H:i') }}
                                                 </small>
+                                            </td>
+                                            <td>
+                                                @php
+                                                    $badge = match($data->status) {
+                                                        'Aktif' => 'bg-success',
+                                                        'Nonaktif' => 'bg-danger',
+                                                        default => 'bg-secondary'
+                                                    };
+                                                @endphp
+
+                                                <span class="badge-status {{ $data->status == 'Aktif' ? 'badge-aktif' : 'badge-nonaktif' }}">
+                                                    {{ $data->status }}
+                                                </span>
                                             </td>
                                             <td class="text-center">
                                                 <div>
@@ -188,17 +204,22 @@
                                                     </button>
                                                     <ul class="dropdown-menu dropdown-menu-end shadow">
                                                         <li>
+                                                            <a class="dropdown-item" href="{{ route('gudangs.show', $data->id) }}">
+                                                                <i class="ri-eye-line me-2"></i>Detail
+                                                            </a>
+                                                        </li>
+                                                        <li>
                                                             <a class="dropdown-item" href="{{ route('gudangs.edit', $data->id) }}">
                                                                 <i class="ri-pencil-fill me-2"></i>Edit
                                                             </a>
                                                         </li>
-                                                        <li>
+                                                        {{-- <li>
                                                             <button type="button" 
                                                                     class="dropdown-item"
                                                                     onclick="window.location.href='{{ route('gudang.history', $data->id) }}'">
                                                                 <i class="ri-time-line me-2"></i>History
                                                             </button>
-                                                        </li>
+                                                        </li> --}}
                                                         <li><hr class="dropdown-divider"></li>
                                                         <li>
                                                             <form action="{{ route('gudangs.destroy', $data->id) }}" method="POST" class="delete-confirm">
@@ -215,7 +236,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="5" class="text-center py-5">
+                                            <td colspan="4" class="text-center py-5">
                                                 <i class="ri-inbox-line ri-3x text-muted d-block mb-3"></i>
                                                 <p class="text-muted mb-0">Belum ada data gudang</p>
                                                 <a href="{{ route('gudangs.create') }}" class="btn btn-primary btn-sm mt-3">
@@ -233,7 +254,7 @@
         </div>
     </div>
 
-    @foreach($gudangs as $data)
+    {{-- @foreach($gudangs as $data)
         <!-- Modal Detail - Simple Table View (Like Screenshot) -->
         <div class="modal fade" id="detailModal{{ $data->id }}" tabindex="-1" aria-labelledby="detailModalLabel{{ $data->id }}" aria-hidden="true">
             <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width: 65%;">
@@ -261,7 +282,7 @@
                                            placeholder="Pencarian/filter...">
                                 </div>
                             </div>
-                            {{-- <div class="col-md-3">
+                            <div class="col-md-3">
                                 <div class="d-flex gap-1">
                                     <button class="btn btn-sm btn-success flex-fill" title="Tambah (Web Form)">
                                         <i class="ri-add-line me-1"></i>Tambah (Web Form)
@@ -270,7 +291,7 @@
                                         <i class="ri-file-excel-line"></i>
                                     </button>
                                 </div>
-                            </div> --}}
+                            </div>
                         </div>
                     </div>
 
@@ -309,11 +330,48 @@
                 </div>
             </div>
         </div>
-    @endforeach
+    @endforeach --}}
 @endsection
 
 @push('styles')
     <style>
+       .badge-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+
+            padding: 4px 10px;
+            border-radius: 999px;
+
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+
+            white-space: nowrap;
+            line-height: 1;
+        }
+
+        /* ================= STATUS ================= */
+
+        /* Aktif */
+        .badge-aktif {
+            background: #DCFCE7;     /* soft green */
+            color: #166534;          /* dark green */
+        }
+
+        /* Nonaktif */
+        .badge-nonaktif {
+            background: #FEE2E2;     /* soft red */
+            color: #991B1B;          /* dark red */
+        }
+
+        /* Optional kalau mau tetap pakai yang lama */
+        /* .badge-normal   { background: #DCFCE7; color: #166534; }
+        .badge-menipis  { background: #FEF3C7; color: #92400E; }
+        .badge-expired  { background: #FEE2E2; color: #991B1B; }
+        .badge-warning  { background: #EDE9FE; color: #5B21B6; } */
+
         .badge {
             font-weight: 500;
             padding: 0.4em 0.8em;
@@ -489,7 +547,7 @@ $(document).ready(function() {
                         emptyTable: "Belum ada data gudang"
                     },
                     columnDefs: [
-                        { orderable: false, targets: [4] }
+                        { orderable: false, targets: [3] }
                     ]
                 });
 
@@ -538,143 +596,143 @@ $(document).ready(function() {
     }, 5000);
 
     // ========== Detail Modal Script - Simple Table View ===============
-    let loadedModals = {};
+    // let loadedModals = {};
 
-    $(document).on('show.bs.modal', '[id^="detailModal"]', function () {
-        const modal = $(this);
-        const gudangId = modal.attr('id').replace('detailModal', '');
-        const tableBodyId = `detailTableBody-${gudangId}`;
-        const $tableBody = $(`#${tableBodyId}`);
+    // $(document).on('show.bs.modal', '[id^="detailModal"]', function () {
+    //     const modal = $(this);
+    //     const gudangId = modal.attr('id').replace('detailModal', '');
+    //     const tableBodyId = `detailTableBody-${gudangId}`;
+    //     const $tableBody = $(`#${tableBodyId}`);
 
-        // Check if already loaded
-        if (loadedModals[gudangId]) {
-            return;
-        }
+    //     // Check if already loaded
+    //     if (loadedModals[gudangId]) {
+    //         return;
+    //     }
 
-        console.log('Loading data for gudang:', gudangId);
+    //     console.log('Loading data for gudang:', gudangId);
 
-        // Fetch data via AJAX
-        $.ajax({
-            url: `/gudang/${gudangId}/details/data`,
-            type: 'GET',
-            data: {
-                start: 0,
-                length: -1 // Get all data
-            },
-            success: function(response) {
-                console.log('Data received:', response);
+    //     // Fetch data via AJAX
+    //     $.ajax({
+    //         url: `/gudang/${gudangId}/details/data`,
+    //         type: 'GET',
+    //         data: {
+    //             start: 0,
+    //             length: -1 // Get all data
+    //         },
+    //         success: function(response) {
+    //             console.log('Data received:', response);
                 
-                if (!response.data || response.data.length === 0) {
-                    $tableBody.html(`
-                        <tr>
-                            <td colspan="4" class="empty-state-table">
-                                <i class="ri-inbox-line ri-3x text-muted d-block mb-3"></i>
-                                <p class="text-muted mb-0">Tidak ada data barang</p>
-                            </td>
-                        </tr>
-                    `);
-                    $(`#total-items-${gudangId}`).text('Total: 0 data');
-                    return;
-                }
+    //             if (!response.data || response.data.length === 0) {
+    //                 $tableBody.html(`
+    //                     <tr>
+    //                         <td colspan="4" class="empty-state-table">
+    //                             <i class="ri-inbox-line ri-3x text-muted d-block mb-3"></i>
+    //                             <p class="text-muted mb-0">Tidak ada data barang</p>
+    //                         </td>
+    //                     </tr>
+    //                 `);
+    //                 $(`#total-items-${gudangId}`).text('Total: 0 data');
+    //                 return;
+    //             }
 
-                // Build table rows HTML
-                let rowsHtml = '';
-                response.data.forEach((item, index) => {
-                    rowsHtml += `
-                        <tr>
-                            <td class="text-center">${index + 1}</td>
-                            <td>${item.kode_produk || '-'}</td>
-                            <td>
-                                <div class="product-info-line">
-                                    <span class="product-label">Nama :</span> 
-                                    <span class="product-value">${item.nama_dagangan || '-'}</span>
-                                </div>
-                                ${item.nomor_izin_edar ? `
-                                <div class="product-info-line">
-                                    <span class="product-label">NIE :</span> 
-                                    <span class="product-value">${item.nomor_izin_edar}</span>
-                                </div>
-                                ` : ''}
-                                ${item.tipe ? `
-                                <div class="product-info-line">
-                                    <span class="product-label">Tipe :</span> 
-                                    <span class="product-value">${item.tipe}</span>
-                                </div>
-                                ` : ''}
-                                ${item.ukuran ? `
-                                <div class="product-info-line">
-                                    <span class="product-label">Ukuran :</span> 
-                                    <span class="product-value">${item.ukuran}</span>
-                                </div>
-                                ` : ''}
-                                ${item.kemasan ? `
-                                <div class="product-info-line">
-                                    <span class="product-label">Kemasan :</span> 
-                                    <span class="product-value">${item.kemasan}</span>
-                                </div>
-                                ` : ''}
-                            </td>
-                            <td>
-                                <div class="stock-info-line">
-                                    <span class="product-label">Stok saat ini:</span> 
-                                    <span class="product-value">${item.stock_gudang || 0}</span>
-                                </div>
-                                <div class="stock-info-line">
-                                    <span class="product-label">Jumlah Produksi :</span> 
-                                    <span class="product-value">${item.jumlah_stock || 0}</span>
-                                </div>
-                                <div class="stock-info-line">
-                                    <span class="product-label">Jumlah Pengalihan :</span> 
-                                    <span class="product-value">${item.jumlah_keluar || 0}</span>
-                                </div>
-                                <div class="stock-info-line">
-                                    <span class="product-label">Jumlah Retur :</span> 
-                                    <span class="product-value">${item.jumlah_retur || 0}</span>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                });
+    //             // Build table rows HTML
+    //             let rowsHtml = '';
+    //             response.data.forEach((item, index) => {
+    //                 rowsHtml += `
+    //                     <tr>
+    //                         <td class="text-center">${index + 1}</td>
+    //                         <td>${item.kode_produk || '-'}</td>
+    //                         <td>
+    //                             <div class="product-info-line">
+    //                                 <span class="product-label">Nama :</span> 
+    //                                 <span class="product-value">${item.nama_dagangan || '-'}</span>
+    //                             </div>
+    //                             ${item.nomor_izin_edar ? `
+    //                             <div class="product-info-line">
+    //                                 <span class="product-label">NIE :</span> 
+    //                                 <span class="product-value">${item.nomor_izin_edar}</span>
+    //                             </div>
+    //                             ` : ''}
+    //                             ${item.tipe ? `
+    //                             <div class="product-info-line">
+    //                                 <span class="product-label">Tipe :</span> 
+    //                                 <span class="product-value">${item.tipe}</span>
+    //                             </div>
+    //                             ` : ''}
+    //                             ${item.ukuran ? `
+    //                             <div class="product-info-line">
+    //                                 <span class="product-label">Ukuran :</span> 
+    //                                 <span class="product-value">${item.ukuran}</span>
+    //                             </div>
+    //                             ` : ''}
+    //                             ${item.kemasan ? `
+    //                             <div class="product-info-line">
+    //                                 <span class="product-label">Kemasan :</span> 
+    //                                 <span class="product-value">${item.kemasan}</span>
+    //                             </div>
+    //                             ` : ''}
+    //                         </td>
+    //                         <td>
+    //                             <div class="stock-info-line">
+    //                                 <span class="product-label">Stok saat ini:</span> 
+    //                                 <span class="product-value">${item.stock_gudang || 0}</span>
+    //                             </div>
+    //                             <div class="stock-info-line">
+    //                                 <span class="product-label">Jumlah Produksi :</span> 
+    //                                 <span class="product-value">${item.jumlah_stock || 0}</span>
+    //                             </div>
+    //                             <div class="stock-info-line">
+    //                                 <span class="product-label">Jumlah Pengalihan :</span> 
+    //                                 <span class="product-value">${item.jumlah_keluar || 0}</span>
+    //                             </div>
+    //                             <div class="stock-info-line">
+    //                                 <span class="product-label">Jumlah Retur :</span> 
+    //                                 <span class="product-value">${item.jumlah_retur || 0}</span>
+    //                             </div>
+    //                         </td>
+    //                     </tr>
+    //                 `;
+    //             });
 
-                $tableBody.html(rowsHtml);
-                $(`#total-items-${gudangId}`).text(`Total: ${response.recordsTotal} data`);
+    //             $tableBody.html(rowsHtml);
+    //             $(`#total-items-${gudangId}`).text(`Total: ${response.recordsTotal} data`);
                 
-                // Mark as loaded
-                loadedModals[gudangId] = true;
+    //             // Mark as loaded
+    //             loadedModals[gudangId] = true;
 
-                // Setup search functionality
-                $(`.search-detail-${gudangId}`).on('keyup', function() {
-                    const searchText = $(this).val().toLowerCase();
-                    $(`#${tableBodyId} tr`).each(function() {
-                        const text = $(this).text().toLowerCase();
-                        $(this).toggle(text.indexOf(searchText) > -1);
-                    });
-                });
-            },
-            error: function(xhr, error, code) {
-                console.error('Ajax error:', error, code);
-                $tableBody.html(`
-                    <tr>
-                        <td colspan="4" class="text-center py-5">
-                            <div class="alert alert-danger m-0">
-                                <i class="ri-error-warning-line me-2"></i>
-                                Terjadi kesalahan saat memuat data. Silakan coba lagi.
-                            </div>
-                        </td>
-                    </tr>
-                `);
-            }
-        });
-    });
+    //             // Setup search functionality
+    //             $(`.search-detail-${gudangId}`).on('keyup', function() {
+    //                 const searchText = $(this).val().toLowerCase();
+    //                 $(`#${tableBodyId} tr`).each(function() {
+    //                     const text = $(this).text().toLowerCase();
+    //                     $(this).toggle(text.indexOf(searchText) > -1);
+    //                 });
+    //             });
+    //         },
+    //         error: function(xhr, error, code) {
+    //             console.error('Ajax error:', error, code);
+    //             $tableBody.html(`
+    //                 <tr>
+    //                     <td colspan="4" class="text-center py-5">
+    //                         <div class="alert alert-danger m-0">
+    //                             <i class="ri-error-warning-line me-2"></i>
+    //                             Terjadi kesalahan saat memuat data. Silakan coba lagi.
+    //                         </div>
+    //                     </td>
+    //                 </tr>
+    //             `);
+    //         }
+    //     });
+    // });
 
-    // Clean up when modal is hidden
-    $(document).on('hidden.bs.modal', '[id^="detailModal"]', function () {
-        const modal = $(this);
-        const gudangId = modal.attr('id').replace('detailModal', '');
+    // // Clean up when modal is hidden
+    // $(document).on('hidden.bs.modal', '[id^="detailModal"]', function () {
+    //     const modal = $(this);
+    //     const gudangId = modal.attr('id').replace('detailModal', '');
         
-        // Keep the loaded data for next time
-        console.log('Modal closed:', gudangId);
-    });
+    //     // Keep the loaded data for next time
+    //     console.log('Modal closed:', gudangId);
+    // });
 });
 </script>
 @endpush

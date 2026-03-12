@@ -4,7 +4,7 @@
     <h4 class="mb-1"><i class="ri-survey-line me-2 text-primary"></i>Program Evaluasi Pelatihan</h4>
     <p class="text-muted mb-0">Kelola evaluasi efektivitas pelatihan karyawan</p>
 </div>
-<a href="{{ route('evaluation-programs.create') }}" class="btn btn-primary">
+<a href="{{ route('evaluation-programs.create', ['sop_id' => $sop->id] ) }}" class="btn btn-primary">
     <i class="ri-add-circle-line me-1"></i>Tambah Program Evaluasi
 </a>
 </div>
@@ -185,7 +185,7 @@
                                         </a>
                                     </li>
                                     <li>
-                                        <a class="dropdown-item" href="{{ route('evaluation-programs.edit', $program->id) }}">
+                                        <a class="dropdown-item" href="{{ route('evaluation-programs.edit', [$program->id, 'sop_id' => $program->sop_id]) }}">
                                             <i class="ri-edit-line me-2"></i>Edit
                                         </a>
                                     </li>

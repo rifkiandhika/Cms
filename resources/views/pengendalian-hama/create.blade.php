@@ -29,6 +29,9 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Lokasi <span class="text-danger">*</span></label>
+                        
+                        
+                        <input type="hidden" name="sop_id" value="{{ request('sop_id') }}">
                         <input type="text" name="lokasi" class="form-control"
                                placeholder="e.g. Gudang Penyimpanan PT. Premiere Alkes Nusindo"
                                value="{{ old('lokasi') }}" required>

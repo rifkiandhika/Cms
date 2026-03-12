@@ -3,13 +3,13 @@
         <h4 class="mb-1"><i class="ri-book-line me-2 text-primary"></i>Program Pelatihan Karyawan</h4>
         <p class="text-muted mb-0">Kelola program pelatihan karyawan perusahaan</p>
     </div>
-    <a href="{{ route('training-programs.create') }}" class="btn btn-primary">
+    <a href="{{ route('training-programs.create', ['sop_id' => $sop->id]) }}" class="btn btn-primary">
         <i class="ri-add-circle-line me-1"></i>Tambah Program
     </a>
 </div>
 
 {{-- Quick Stats --}}
-<div class="row mb-4">
+<div class="row mb-4 w-100">
     <div class="col-md-3">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
@@ -175,7 +175,7 @@
                                             </a>
                                         </li>
                                         <li>
-                                            <a class="dropdown-item" href="{{ route('training-programs.edit', $program->id) }}">
+                                            <a class="dropdown-item" href="{{ route('training-programs.edit', [$program->id, 'sop_id' => $program->sop_id]) }}">
                                                 <i class="ri-edit-line me-2"></i>Edit
                                             </a>
                                         </li>

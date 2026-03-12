@@ -12,6 +12,7 @@ class CatatanSuhuRuangan extends Model
     protected $table = 'catatan_suhu_ruangans';
 
     protected $fillable = [
+        
         'kontrol_gudang_id',
         'tanggal',
         'kebersihan',

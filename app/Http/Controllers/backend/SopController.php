@@ -170,7 +170,38 @@ class SopController extends Controller
 
     public function previewEdit($id)
     {
-        $sop = Sop::with(['sections.items', 'approvals'])->findOrFail($id);
+        $sop = Sop::with([
+            // Core SOP data
+            'sections.items',
+            'approvals',
+
+            // Jadwal karyawan (jika ada relasi sop_id di tabel jadwal)
+            // 'jadwalKaryawan',
+
+            // Program pelatihan
+            'trainingPrograms.mainCategories.subCategories.trainingItems.details',
+            'trainingPrograms.mainCategories.subCategories.trainingItems.images',
+            'trainingPrograms.mainCategories.subCategories.trainingItems.metadata',
+
+            // Evaluasi
+            'evaluationPrograms.items',
+            'evaluationPrograms.responses',
+
+            // Daftar hadir
+            'attendanceForms.participants',
+
+            // Galeri
+            'galleries.images',
+
+            // Kontrol gudang & suhu
+            'kontrolGudang.catatanSuhu',
+
+            // Pengendalian hama
+            'pengendalianHama.details',
+            'pengendalianHama.gambar',
+        ])->findOrFail($id);
+        
+
         return view('sops.preview-final', compact('sop'));
     }
 
@@ -180,7 +211,31 @@ class SopController extends Controller
     public function show(Sop $sop)
     {
         $sop->load(['sections.items', 'approvals']);
-        return view('sops.show', compact('sop'));
+        $trainingPrograms = TrainingProgram::with([
+            'mainCategories.subCategories.trainingItems.details',
+            'mainCategories.subCategories.trainingItems.images',
+            'mainCategories.subCategories.trainingItems.metadata'
+        ])
+        ->latest()
+        ->get();
+        $programs = EvaluationProgram::with(['items', 'responses'])
+            ->latest()
+            ->get();
+        $attendanceForms = AttendanceForm::withCount('participants')
+            ->latest()
+            ->get();
+    
+        $galleries = Gallery::withCount('images')  
+            ->latest()
+            ->get();
+        $kontrolGudang = KontrolGudang::with('catatanSuhu')
+            ->latest()
+            ->get();
+        $pengendalianHamaList = PengendalianHama::withCount('details')
+            ->with('gambar')
+            ->latest()
+            ->get();
+        return view('sops.show', compact('sop','trainingPrograms', 'programs', 'galleries', 'kontrolGudang', 'pengendalianHamaList', 'attendanceForms'));
     }
 
     /**
@@ -589,15 +644,226 @@ class SopController extends Controller
         return view('sops.partials.pdf-template', compact('sop'))->render();
     }
 
+    public function getPages(Sop $sop): array
+    {
+        $pages = [];
+
+        // Halaman 1: SOP Utama
+        $pages[] = [
+            'type'  => 'sop',
+            'label' => 'SOP Utama',
+            'id'    => $sop->id,
+        ];
+
+        // Jadwal Karyawan — satu halaman per record
+        foreach ($sop->jadwalKaryawan ?? [] as $item) {
+            $pages[] = [
+                'type'  => 'jadwal',
+                'label' => 'Jadwal: ' . ($item->nama_jadwal ?? $item->id),
+                'id'    => $item->id,
+            ];
+        }
+
+        // Training Programs — satu halaman per record
+        foreach ($sop->trainingPrograms ?? [] as $item) {
+            $pages[] = [
+                'type'  => 'training',
+                'label' => 'Pelatihan: ' . ($item->nama_program ?? $item->id),
+                'id'    => $item->id,
+            ];
+        }
+
+        // Attendance Forms — satu halaman per record
+        foreach ($sop->attendanceForms ?? [] as $item) {
+            $pages[] = [
+                'type'  => 'attendance',
+                'label' => 'Daftar Hadir: ' . ($item->topik_pelatihan ?? $item->id),
+                'id'    => $item->id,
+            ];
+        }
+
+        // Evaluation Programs — satu halaman per record
+        foreach ($sop->evaluationPrograms ?? [] as $item) {
+            $pages[] = [
+                'type'  => 'evaluation',
+                'label' => 'Evaluasi: ' . ($item->nama_program ?? $item->id),
+                'id'    => $item->id,
+            ];
+        }
+
+        // Galleries — satu halaman per record
+        foreach ($sop->galleries ?? [] as $item) {
+            $pages[] = [
+                'type'  => 'gallery',
+                'label' => 'Galeri: ' . ($item->nama ?? $item->id),
+                'id'    => $item->id,
+            ];
+        }
+
+        // Kontrol Gudang / Suhu — satu halaman per record
+        foreach ($sop->kontrolGudang ?? [] as $item) {
+            $pages[] = [
+                'type'  => 'suhu',
+                'label' => 'Suhu: ' . ($item->nama_gudang ?? $item->id),
+                'id'    => $item->id,
+            ];
+        }
+
+        // Pengendalian Hama — satu halaman per record
+        foreach ($sop->pengendalianHama ?? [] as $item) {
+            $pages[] = [
+                'type'  => 'hama',
+                'label' => 'Hama: ' . ($item->nama ?? $item->id),
+                'id'    => $item->id,
+            ];
+        }
+
+        return $pages;
+    }
+
+    /**
+     * AJAX: Kembalikan daftar halaman sebagai JSON
+     * Route: GET /sops/{sop}/pages
+     */
+    public function listPages(Sop $sop)
+    {
+        $sop->load([
+            'trainingPrograms',
+            'evaluationPrograms',
+            'attendanceForms',
+            'galleries',
+            'kontrolGudang',
+            'pengendalianHama',
+            // 'jadwalKaryawan', // uncomment jika relasi sudah ada
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'pages'   => $this->getPages($sop),
+        ]);
+    }
+
+    /**
+     * AJAX: Render HTML konten 1 halaman (tanpa header/footer SOP)
+     * Route: GET /sops/{sop}/page-preview?type=training&id=5&show_header=1&show_footer=1
+     */
+    public function pagePreview(Request $request, Sop $sop)
+    {
+        $type        = $request->get('type', 'sop');
+        $dataId      = $request->get('id');
+        $showHeader  = $request->boolean('show_header', true);
+        $showFooter  = $request->boolean('show_footer', true);
+
+        $sop->load(['sections.items', 'approvals']);
+
+        try {
+            $contentHtml = $this->renderPageContent($type, $dataId, $sop);
+
+            // Bungkus dengan wrapper header/footer SOP
+            $html = view('sops.partials.page-wrapper', [
+                'sop'         => $sop,
+                'contentHtml' => $contentHtml,
+                'showHeader'  => $showHeader,
+                'showFooter'  => $showFooter,
+                'pageType'    => $type,
+            ])->render();
+
+            return response()->json([
+                'success' => true,
+                'html'    => $html,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memuat halaman: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Render konten blade sesuai tipe halaman
+     */
+    public function renderPageContent(string $type, $dataId, Sop $sop): string
+    {
+        switch ($type) {
+
+            case 'sop':
+                return view('sops.partials.pdf-template', compact('sop'))->render();
+
+            // case 'jadwal':
+            //     $jadwal = \App\Models\JadwalKaryawan::findOrFail($dataId);
+            //     return view('jadwal-karyawan.preview', compact('jadwal', 'sop'))->render();
+
+            case 'training':
+                $trainingProgram = TrainingProgram::with([
+                    'mainCategories.subCategories.trainingItems.details',
+                    'mainCategories.subCategories.trainingItems.images',
+                    'mainCategories.subCategories.trainingItems.metadata',
+                ])->findOrFail($dataId);
+                return view('training_programs.preview', compact('trainingProgram', 'sop'))->render();
+
+            case 'attendance':
+                $attendanceForm = AttendanceForm::with('participants')->findOrFail($dataId);
+                return view('attendance-forms.preview', compact('attendanceForm', 'sop'))->render();
+
+            case 'evaluation':
+                $evaluationProgram = EvaluationProgram::with([
+                    'items',
+                    'responses',
+                    'participants',
+                ])->findOrFail($dataId);
+                return view('evaluation_programs.preview', compact('evaluationProgram', 'sop'))->render();
+
+            case 'gallery':
+                $gallery = Gallery::with('images')->findOrFail($dataId);
+                return view('gallery.preview', compact('gallery', 'sop'))->render();
+
+            case 'suhu':
+                $kontrolGudang = KontrolGudang::with('catatanSuhu')->findOrFail($dataId);
+                $catatanSuhu   = $kontrolGudang->catatanSuhu;
+                $nama_gudang   = $kontrolGudang->nama_gudang ?? '-';
+                $periode       = $kontrolGudang->periode     ?? '-';
+                $tanggal_cetak = now()->format('d M Y');
+                return view('catatan-suhu.preview', compact(
+                    'kontrolGudang', 'catatanSuhu', 'nama_gudang', 'periode', 'tanggal_cetak', 'sop'
+                ))->render();
+
+            case 'hama':
+                $pengendalianHama = PengendalianHama::with(['details', 'gambar'])
+                    ->findOrFail($dataId);
+                $lokasi          = $pengendalianHama->lokasi           ?? '-';
+                $bulan           = $pengendalianHama->bulan            ?? '-';
+                $tahun           = $pengendalianHama->tahun            ?? now()->year;
+                $details         = $pengendalianHama->details;
+                return view('pengendalian-hama.preview', compact(
+                    'pengendalianHama', 'lokasi', 'bulan', 'tahun', 'details', 'sop'
+                ))->render();
+
+            default:
+                return '<p class="text-center text-muted py-5">Tipe halaman tidak dikenali.</p>';
+        }
+    }
+    
     /**
      * Download PDF
      */
     public function downloadPdf(Sop $sop)
     {
-        $sop->load(['sections.items', 'approvals']);
-        
+        $sop->load([
+            'sections.items',
+            'approvals',
+            'trainingPrograms.mainCategories.subCategories.trainingItems',
+            'evaluationPrograms.items',
+            'attendanceForms.participants',
+            'galleries.images',
+            'kontrolGudang.catatanSuhu',
+            'pengendalianHama.details',
+            'pengendalianHama.gambar',
+        ]);
+
         $pdf = Pdf::loadView('sops.partials.pdf-template', compact('sop'));
-        
+
         return $pdf->download('SOP-' . $sop->no_sop . '.pdf');
     }
 }
