@@ -72,7 +72,7 @@ class PoexConfirmationController extends Controller
             'items.*.gudang_id'                    => 'required|uuid|exists:gudangs,id',
             'items.*.id_po_item'                   => 'required|uuid',
             'items.*.batches'                      => 'required|array|min:1',
-            'items.*.batches.*.batch_number'       => 'nullable|string|max:50',
+            'items.*.batches.*.batch_number'       => 'nullable|string',
             'items.*.batches.*.tanggal_kadaluarsa' => 'required|date',
             'items.*.batches.*.qty_diterima'       => 'required|integer|min:1',
             'items.*.batches.*.kondisi'            => 'required|in:Baik,Rusak,Kadaluarsa',
